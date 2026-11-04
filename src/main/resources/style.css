@@ -1,0 +1,431 @@
+
+/* =================================
+   BESAFE THEME
+   ================================= */
+
+.root {
+    -fx-background-color: #0A0A18;
+    -fx-font-family: "Segoe UI";
+}
+
+/* =================================
+   GENERAL TEXT
+   ================================= */
+
+.label {
+    -fx-text-fill: #E5E7EB;
+    -fx-font-size: 14px;
+    -fx-font-weight: normal;
+}
+
+.app-title {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #F9FAFB;
+}
+
+#lbl-version {
+    -fx-font-size: 10px;
+    -fx-text-fill: #85859B;
+}
+
+/* =================================
+   SIDEBAR
+   ================================= */
+
+.sidebar {
+    -fx-background-color: #10101F;
+    -fx-border-color: #25253A;
+    -fx-border-width: 0px 1px 0px 0px;
+    -fx-padding: 14px;
+    -fx-spacing: 14px;
+}
+
+.sidebar-header {
+    -fx-spacing: 2px;
+    -fx-padding: 4px 6px 8px 6px;
+}
+
+/* =================================
+   ACTION BUTTONS
+   ================================= */
+
+.chat-action-bar {
+    -fx-spacing: 10px;
+    -fx-padding: 8px 0px;
+    -fx-alignment: center;
+}
+
+.button.chat-action-button {
+    -fx-pref-width: 48px;
+    -fx-min-width: 48px;
+    -fx-max-width: 48px;
+
+    -fx-pref-height: 42px;
+    -fx-min-height: 42px;
+    -fx-max-height: 42px;
+
+    -fx-padding: 0px;
+
+    -fx-background-color: #19192D;
+    -fx-background-radius: 9px;
+
+    -fx-border-color: #303047;
+    -fx-border-radius: 9px;
+    -fx-border-width: 1px;
+
+    -fx-text-fill: #DDE7F5;
+    -fx-font-size: 18px;
+    -fx-font-weight: normal;
+
+    -fx-cursor: hand;
+}
+
+.button.chat-action-button:hover {
+    -fx-background-color: #252540;
+    -fx-border-color: #397BCB;
+}
+
+/* =================================
+   CHAT LIST PANEL
+   ================================= */
+
+.chat-list-panel {
+    -fx-background-color: #0D0D1B;
+
+    -fx-border-color: #29293F;
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+
+    -fx-background-radius: 12px;
+}
+
+.chat-items {
+    -fx-spacing: 8px;
+    -fx-padding: 10px;
+}
+
+/* =================================
+   CHAT ITEMS
+   ================================= */
+
+.chat-item {
+    -fx-background-color: #19192D;
+    -fx-background-radius: 9px;
+
+    -fx-padding: 13px;
+
+    -fx-min-height: 48px;
+    -fx-cursor: hand;
+}
+
+.chat-item:hover {
+    -fx-background-color: #252540;
+}
+
+.chat-item.selected {
+    -fx-background-color: #1C3452;
+
+    -fx-border-color: #347BCB;
+    -fx-border-width: 1px;
+    -fx-border-radius: 9px;
+}
+
+.chat-info {
+    -fx-spacing: 12px;
+    -fx-alignment: center-left;
+}
+
+.chat-avatar {
+    -fx-font-size: 19px;
+    -fx-font-weight: normal;
+}
+
+.chat-username {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #F1F5F9;
+}
+
+/* =================================
+   CHAT SCROLLBAR
+   ================================= */
+
+.chat-scroll-pane,
+.message-scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0px;
+}
+
+.chat-scroll-pane > .viewport,
+.message-scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.chat-scroll-pane .scroll-bar:vertical,
+.message-scroll-pane .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+    -fx-min-width: 8px;
+    -fx-max-width: 8px;
+}
+
+.chat-scroll-pane .scroll-bar:vertical .track,
+.message-scroll-pane .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+    -fx-background-radius: 10px;
+}
+
+.chat-scroll-pane .scroll-bar:vertical .thumb,
+.message-scroll-pane .scroll-bar:vertical .thumb {
+    -fx-background-color: #393950;
+    -fx-background-radius: 10px;
+}
+
+.chat-scroll-pane .scroll-bar:vertical .thumb:hover,
+.message-scroll-pane .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #5275B8;
+}
+
+.chat-scroll-pane .scroll-bar .increment-button,
+.chat-scroll-pane .scroll-bar .decrement-button,
+.message-scroll-pane .scroll-bar .increment-button,
+.message-scroll-pane .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0px;
+    -fx-pref-height: 0px;
+    -fx-min-height: 0px;
+    -fx-max-height: 0px;
+}
+
+.chat-scroll-pane .scroll-bar .increment-arrow,
+.chat-scroll-pane .scroll-bar .decrement-arrow,
+.message-scroll-pane .scroll-bar .increment-arrow,
+.message-scroll-pane .scroll-bar .decrement-arrow {
+    -fx-padding: 0px;
+    -fx-shape: "";
+}
+
+/* =================================
+   CHAT AREA
+   ================================= */
+
+.chat-area {
+    -fx-background-color: #0C0C19;
+    -fx-padding: 14px;
+}
+
+.message-area-panel {
+    -fx-background-color: #111120;
+
+    -fx-border-color: #29293F;
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+
+    -fx-background-radius: 12px;
+
+    -fx-padding: 12px;
+}
+
+.message-list {
+    -fx-spacing: 12px;
+    -fx-padding: 10px;
+}
+
+/* =================================
+   TEXT INPUT
+   ================================= */
+
+.text-field {
+    -fx-background-color: #19192D;
+
+    -fx-text-fill: #F9FAFB;
+    -fx-prompt-text-fill: #85859B;
+
+    -fx-background-radius: 9px;
+    -fx-border-radius: 9px;
+
+    -fx-border-color: #303047;
+    -fx-border-width: 1px;
+
+    -fx-padding: 11px;
+}
+
+.text-field.focused {
+    -fx-border-color: #347BCB;
+}
+
+/* =================================
+   GENERAL BUTTONS
+   ================================= */
+
+.button {
+    -fx-background-color: #2563EB;
+    -fx-text-fill: white;
+
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+
+    -fx-border-color: transparent;
+    -fx-padding: 10px 20px;
+
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #1D4ED8;
+}
+
+/* =================================
+   REGISTRATION
+   ================================= */
+
+#welcome-title {
+    -fx-font-size: 29px;
+    -fx-font-weight: bold;
+}
+
+#welcome-description {
+    -fx-font-size: 14px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #9CA3AF;
+}
+
+#name-field {
+    -fx-max-width: 280px;
+}
+
+#continue-button {
+    -fx-min-width: 150px;
+}
+
+
+/* =================================
+   APP HEADER
+   ================================= */
+
+.sidebar-header {
+    -fx-alignment: center-left;
+    -fx-spacing: 8px;
+    -fx-padding: 4px 6px 8px 6px;
+}
+
+.app-brand {
+    -fx-spacing: 1px;
+    -fx-alignment: center-left;
+}
+
+.button.settings-button {
+    -fx-min-width: 40px;
+    -fx-pref-width: 40px;
+    -fx-max-width: 40px;
+
+    -fx-min-height: 40px;
+    -fx-pref-height: 40px;
+    -fx-max-height: 40px;
+
+    -fx-padding: 0px;
+
+    -fx-background-color: #19192D;
+    -fx-background-radius: 9px;
+
+    -fx-border-color: #303047;
+    -fx-border-radius: 9px;
+    -fx-border-width: 1px;
+
+    -fx-text-fill: #DDE7F5;
+    -fx-font-size: 19px;
+    -fx-font-weight: normal;
+}
+
+.button.settings-button:hover {
+    -fx-background-color: #252540;
+    -fx-border-color: #397BCB;
+}
+
+/* =================================
+   CHAT HEADER
+   ================================= */
+
+.chat-header {
+    -fx-background-color: #111120;
+
+    -fx-border-color: #29293F;
+    -fx-border-width: 0px 0px 1px 0px;
+
+    -fx-background-radius: 10px 10px 0px 0px;
+}
+
+.chat-header-avatar {
+    -fx-background-color: #202039;
+    -fx-background-radius: 50%;
+
+    -fx-min-width: 42px;
+    -fx-pref-width: 42px;
+    -fx-max-width: 42px;
+
+    -fx-min-height: 42px;
+    -fx-pref-height: 42px;
+    -fx-max-height: 42px;
+
+    -fx-alignment: center;
+    -fx-font-size: 23px;
+}
+
+.chat-header-username {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #F9FAFB;
+}
+
+
+/* =================================
+   APPLICATION TOP BAR
+   ================================= */
+
+.app-top-bar {
+    -fx-background-color: #10101F;
+
+    -fx-border-color: #29293F;
+    -fx-border-width: 0px 0px 1px 0px;
+
+    -fx-padding: 10px 14px;
+    -fx-min-height: 72px;
+}
+
+.app-brand {
+    -fx-spacing: 1px;
+    -fx-alignment: center-left;
+}
+
+.button.settings-button {
+    -fx-min-width: 42px;
+    -fx-pref-width: 42px;
+    -fx-max-width: 42px;
+
+    -fx-min-height: 42px;
+    -fx-pref-height: 42px;
+    -fx-max-height: 42px;
+
+    -fx-padding: 0px;
+
+    -fx-background-color: #19192D;
+    -fx-background-radius: 10px;
+
+    -fx-border-color: #303047;
+    -fx-border-radius: 10px;
+    -fx-border-width: 1px;
+
+    -fx-text-fill: #DDE7F5;
+    -fx-font-size: 19px;
+}
+
+.button.settings-button:hover {
+    -fx-background-color: #252540;
+    -fx-border-color: #397BCB;
+}

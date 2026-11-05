@@ -1,5 +1,8 @@
 package com.besafe.protocol;
 
+import java.security.KeyPair;
+import java.security.PublicKey;
+
 public class HandshakeState {
 
     private final HandshakeRole role;
@@ -7,6 +10,9 @@ public class HandshakeState {
     private HandshakeStatus status = HandshakeStatus.INITIAL;
 
     private IdentityPayload remoteIdentity;
+
+    private KeyPair localEphemeralKeyPair;
+    private PublicKey remoteEphemeralPublicKey;
 
     private byte[] initiatorNonce;
     private byte[] responderNonce;
@@ -69,5 +75,36 @@ public class HandshakeState {
         }
 
         return nonce.clone();
+    }
+
+    public void setLocalEphemeralKeyPair(KeyPair keyPair) {
+        if (keyPair == null) {
+            throw new IllegalArgumentException("KeyPair cannot be null");
+        }
+
+        this.localEphemeralKeyPair = keyPair;
+    }
+
+    public void setRemoteEphemeralPublicKey(PublicKey key) {
+        if (key == null) {
+            throw new IllegalArgumentException("PublicKey cannot be null");
+        }
+
+        String algorithm = key.getAlgorithm();
+
+        if (!algorithm.equalsIgnoreCase("X25519")
+                && !algorithm.equalsIgnoreCase("XDH")) {
+            throw new IllegalArgumentException("Only X25519 keys are supported");
+        }
+
+        this.remoteEphemeralPublicKey = key;
+    }
+
+    public KeyPair getLocalEphemeralKeyPair() {
+        return localEphemeralKeyPair;
+    }
+
+    public PublicKey getRemoteEphemeralPublicKey() {
+        return remoteEphemeralPublicKey;
     }
 }

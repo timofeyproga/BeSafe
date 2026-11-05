@@ -1,25 +1,30 @@
-
 package com.besafe.protocol;
 
+import com.besafe.crypto.KeyExchange;
 import com.besafe.identity.UserIdentity;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.SecureRandom;
 import java.util.Arrays;
 
 public class HandshakeService {
 
     private static final int NONCE_LENGTH = 32;
     private static final int SIGNATURE_LENGTH = 64;
-    private static final int CHALLENGE_RESPONSE_LENGTH =
-            NONCE_LENGTH + SIGNATURE_LENGTH;
 
     private final UserIdentity localIdentity;
     private final HandshakeState state;
     private final ChallengeService challengeService;
     private final HandshakeCrypto crypto;
+
+    private KeyExchange keyExchange = new KeyExchange();
+    private SecureRandom secureRandom = new SecureRandom();
 
     public HandshakeService(
             UserIdentity localIdentity,
@@ -40,42 +45,52 @@ public class HandshakeService {
         this.crypto = crypto;
     }
 
-    // Вызывается инициатором после обмена идентификаторами.
-    public ProtocolMessage start() {
+    public ProtocolMessage start() throws GeneralSecurityException, IOException {
         requireRole(HandshakeRole.INITIATOR);
         requireStatus(HandshakeStatus.IDENTITY_EXCHANGED);
 
-        byte[] nonceA = challengeService.generateChallenge();
+        byte[] nonceA = generateNonce();
+
+        KeyPair ephemeralKeyPair = keyExchange.generateKeyPair();
+
         state.setInitiatorNonce(nonceA);
+        state.setLocalEphemeralKeyPair(ephemeralKeyPair);
+
+        byte[] payload = serializeChallengePayload(
+                nonceA,
+                ephemeralKeyPair.getPublic().getEncoded()
+        );
+
         state.setStatus(HandshakeStatus.CHALLENGE_SENT);
 
-        return new ProtocolMessage(MessageType.CHALLENGE, nonceA);
+        return new ProtocolMessage(MessageType.CHALLENGE, payload);
     }
 
-    // Вызывается ответчиком при получении nonceA.
-    public ProtocolMessage receiveChallenge(
-            ProtocolMessage message
-    ) throws GeneralSecurityException, IOException {
+    public ProtocolMessage receiveChallenge(ProtocolMessage message)
+            throws GeneralSecurityException, IOException {
 
         requireRole(HandshakeRole.RESPONDER);
         requireStatus(HandshakeStatus.IDENTITY_EXCHANGED);
         requireMessageType(message, MessageType.CHALLENGE);
 
-        byte[] nonceA = message.getPayload();
+        ChallengePayload challenge = deserializeChallengePayload(message.getPayload());
 
-        if (nonceA.length != NONCE_LENGTH) {
-            fail("Invalid initiator nonce length");
-        }
+        state.setInitiatorNonce(challenge.nonce());
+        state.setRemoteEphemeralPublicKey(
+                keyExchange.decodePublicKey(challenge.ephemeralPublicKey())
+        );
 
-        state.setInitiatorNonce(nonceA);
+        KeyPair ephemeralKeyPair = keyExchange.generateKeyPair();
+        byte[] nonceB = generateNonce();
 
-        byte[] nonceB = challengeService.generateChallenge();
         state.setResponderNonce(nonceB);
+        state.setLocalEphemeralKeyPair(ephemeralKeyPair);
 
-        byte[] transcript = createTranscript();
+        HandshakeTranscript transcript = createTranscript();
+
         byte[] signingData = createSigningData(
                 "BeSafe-Handshake-Responder-v1",
-                transcript
+                transcript.toByteArray()
         );
 
         byte[] signature = crypto.sign(
@@ -83,63 +98,56 @@ public class HandshakeService {
                 localIdentity.getPrivateKey()
         );
 
-        byte[] responsePayload = concatenate(nonceB, signature);
+        byte[] payload = serializeChallengeResponsePayload(
+                nonceB,
+                ephemeralKeyPair.getPublic().getEncoded(),
+                signature
+        );
 
         state.setStatus(HandshakeStatus.RESPONSE_SENT);
 
-        return new ProtocolMessage(
-                MessageType.CHALLENGE_RESPONSE,
-                responsePayload
-        );
+        return new ProtocolMessage(MessageType.CHALLENGE_RESPONSE, payload);
     }
 
-    // Вызывается инициатором при получении nonceB и подписи ответчика.
-    public ProtocolMessage receiveChallengeResponse(
-            ProtocolMessage message
-    ) throws GeneralSecurityException, IOException {
+    public ProtocolMessage receiveChallengeResponse(ProtocolMessage message)
+            throws GeneralSecurityException, IOException {
 
         requireRole(HandshakeRole.INITIATOR);
         requireStatus(HandshakeStatus.CHALLENGE_SENT);
         requireMessageType(message, MessageType.CHALLENGE_RESPONSE);
 
-        byte[] payload = message.getPayload();
+        ChallengeResponsePayload response =
+                deserializeChallengeResponsePayload(message.getPayload());
 
-        if (payload.length != CHALLENGE_RESPONSE_LENGTH) {
-            fail("Invalid challenge response length");
-        }
-
-        byte[] nonceB = Arrays.copyOfRange(
-                payload, 0, NONCE_LENGTH
+        state.setResponderNonce(response.nonce());
+        state.setRemoteEphemeralPublicKey(
+                keyExchange.decodePublicKey(response.ephemeralPublicKey())
         );
 
-        byte[] responderSignature = Arrays.copyOfRange(
-                payload, NONCE_LENGTH, payload.length
-        );
+        HandshakeTranscript transcript = createTranscript();
 
-        state.setResponderNonce(nonceB);
-
-        byte[] transcript = createTranscript();
-        byte[] responderSigningData = createSigningData(
+        byte[] signingData = createSigningData(
                 "BeSafe-Handshake-Responder-v1",
-                transcript
+                transcript.toByteArray()
         );
 
-        boolean responderVerified = crypto.verify(
-                responderSigningData,
-                responderSignature,
+        boolean valid = crypto.verify(
+                signingData,
+                response.signature(),
                 state.getRemoteIdentity().getPublicKey()
         );
 
-        if (!responderVerified) {
-            fail("Responder signature verification failed");
+        if (!valid) {
+            fail("Invalid responder signature");
+            throw new SecurityException("Invalid responder signature");
         }
 
         byte[] initiatorSigningData = createSigningData(
                 "BeSafe-Handshake-Initiator-v1",
-                transcript
+                transcript.toByteArray()
         );
 
-        byte[] initiatorSignature = crypto.sign(
+        byte[] signature = crypto.sign(
                 initiatorSigningData,
                 localIdentity.getPrivateKey()
         );
@@ -148,7 +156,7 @@ public class HandshakeService {
 
         return new ProtocolMessage(
                 MessageType.AUTHENTICATION_SIGNATURE,
-                initiatorSignature
+                signature
         );
     }
 
@@ -170,10 +178,11 @@ public class HandshakeService {
             fail("Invalid authentication signature length");
         }
 
-        byte[] transcript = createTranscript();
+        HandshakeTranscript transcript = createTranscript();
+
         byte[] signingData = createSigningData(
                 "BeSafe-Handshake-Initiator-v1",
-                transcript
+                transcript.toByteArray()
         );
 
         boolean initiatorVerified = crypto.verify(
@@ -212,34 +221,32 @@ public class HandshakeService {
         state.setStatus(HandshakeStatus.AUTHENTICATED);
     }
 
-    private byte[] createTranscript() throws IOException {
-        if (state.getRemoteIdentity() == null
-                || state.getInitiatorNonce() == null
-                || state.getResponderNonce() == null) {
-            throw new IllegalStateException(
-                    "Handshake transcript is incomplete"
-            );
-        }
+    private HandshakeTranscript createTranscript() {
+        IdentityPayload remote = state.getRemoteIdentity();
 
         if (state.getRole() == HandshakeRole.INITIATOR) {
             return new HandshakeTranscript(
                     localIdentity.getUserId(),
-                    state.getRemoteIdentity().getUserId(),
+                    remote.getUserId(),
                     localIdentity.getPublicKey(),
-                    state.getRemoteIdentity().getPublicKey(),
+                    remote.getPublicKey(),
                     state.getInitiatorNonce(),
-                    state.getResponderNonce()
-            ).toByteArray();
+                    state.getResponderNonce(),
+                    state.getLocalEphemeralKeyPair().getPublic(),
+                    state.getRemoteEphemeralPublicKey()
+            );
         }
 
         return new HandshakeTranscript(
-                state.getRemoteIdentity().getUserId(),
+                remote.getUserId(),
                 localIdentity.getUserId(),
-                state.getRemoteIdentity().getPublicKey(),
+                remote.getPublicKey(),
                 localIdentity.getPublicKey(),
                 state.getInitiatorNonce(),
-                state.getResponderNonce()
-        ).toByteArray();
+                state.getResponderNonce(),
+                state.getRemoteEphemeralPublicKey(),
+                state.getLocalEphemeralKeyPair().getPublic()
+        );
     }
 
     private byte[] createSigningData(
@@ -271,6 +278,124 @@ public class HandshakeService {
         );
 
         return result;
+    }
+
+    private byte[] serializeChallengePayload(byte[] nonce, byte[] publicKey)
+            throws IOException {
+
+        validatePayloadParts(nonce, publicKey);
+
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        DataOutputStream output = new DataOutputStream(buffer);
+
+        output.write(nonce);
+        output.writeInt(publicKey.length);
+        output.write(publicKey);
+
+        return buffer.toByteArray();
+    }
+
+    private ChallengePayload deserializeChallengePayload(byte[] payload)
+            throws IOException {
+
+        DataInputStream input = new DataInputStream(
+                new ByteArrayInputStream(payload)
+        );
+
+        byte[] nonce = new byte[NONCE_LENGTH];
+        input.readFully(nonce);
+
+        int keyLength = input.readInt();
+
+        if (keyLength <= 0 || keyLength > 128) {
+            throw new IOException("Invalid ephemeral public key length");
+        }
+
+        byte[] publicKey = new byte[keyLength];
+        input.readFully(publicKey);
+
+        if (input.available() != 0) {
+            throw new IOException("Unexpected trailing data in CHALLENGE");
+        }
+
+        return new ChallengePayload(nonce, publicKey);
+    }
+
+    private byte[] serializeChallengeResponsePayload(
+            byte[] nonce,
+            byte[] publicKey,
+            byte[] signature
+    ) throws IOException {
+
+        validatePayloadParts(nonce, publicKey);
+
+        if (signature == null || signature.length != SIGNATURE_LENGTH) {
+            throw new IllegalArgumentException("Invalid signature length");
+        }
+
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        DataOutputStream output = new DataOutputStream(buffer);
+
+        output.write(nonce);
+        output.writeInt(publicKey.length);
+        output.write(publicKey);
+        output.write(signature);
+
+        return buffer.toByteArray();
+    }
+
+    private ChallengeResponsePayload deserializeChallengeResponsePayload(
+            byte[] payload
+    ) throws IOException {
+
+        DataInputStream input = new DataInputStream(
+                new ByteArrayInputStream(payload)
+        );
+
+        byte[] nonce = new byte[NONCE_LENGTH];
+        input.readFully(nonce);
+
+        int keyLength = input.readInt();
+
+        if (keyLength <= 0 || keyLength > 128) {
+            throw new IOException("Invalid ephemeral public key length");
+        }
+
+        byte[] publicKey = new byte[keyLength];
+        input.readFully(publicKey);
+
+        byte[] signature = new byte[SIGNATURE_LENGTH];
+        input.readFully(signature);
+
+        if (input.available() != 0) {
+            throw new IOException("Unexpected trailing data in CHALLENGE_RESPONSE");
+        }
+
+        return new ChallengeResponsePayload(nonce, publicKey, signature);
+    }
+
+    private void validatePayloadParts(byte[] nonce, byte[] publicKey) {
+        if (nonce == null || nonce.length != NONCE_LENGTH) {
+            throw new IllegalArgumentException("Invalid nonce");
+        }
+
+        if (publicKey == null || publicKey.length == 0 || publicKey.length > 128) {
+            throw new IllegalArgumentException("Invalid public key");
+        }
+    }
+
+    private record ChallengePayload(byte[] nonce, byte[] ephemeralPublicKey) {}
+
+    private record ChallengeResponsePayload(
+            byte[] nonce,
+            byte[] ephemeralPublicKey,
+            byte[] signature
+    ) {}
+
+    private byte[] generateNonce() {
+        byte[] nonce = new byte[NONCE_LENGTH];
+        secureRandom.nextBytes(nonce);
+        return nonce;
     }
 
     private void requireRole(HandshakeRole expected) {

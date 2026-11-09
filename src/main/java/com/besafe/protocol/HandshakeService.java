@@ -1,15 +1,20 @@
 package com.besafe.protocol;
 
+import com.besafe.crypto.KeyDerivation;
 import com.besafe.crypto.KeyExchange;
 import com.besafe.identity.UserIdentity;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
@@ -22,6 +27,7 @@ public class HandshakeService {
     private final HandshakeState state;
     private final ChallengeService challengeService;
     private final HandshakeCrypto crypto;
+    private final KeyDerivation keyDerivation = new KeyDerivation();
 
     private KeyExchange keyExchange = new KeyExchange();
     private SecureRandom secureRandom = new SecureRandom();
@@ -139,8 +145,9 @@ public class HandshakeService {
 
         if (!valid) {
             fail("Invalid responder signature");
-            throw new SecurityException("Invalid responder signature");
         }
+
+        state.setSessionKeys(deriveSessionKeys());
 
         byte[] initiatorSigningData = createSigningData(
                 "BeSafe-Handshake-Initiator-v1",
@@ -160,7 +167,6 @@ public class HandshakeService {
         );
     }
 
-    // Вызывается ответчиком при получении подписи инициатора.
     public ProtocolMessage receiveAuthenticationSignature(
             ProtocolMessage message
     ) throws GeneralSecurityException, IOException {
@@ -195,18 +201,24 @@ public class HandshakeService {
             fail("Initiator signature verification failed");
         }
 
-        state.setStatus(HandshakeStatus.AUTHENTICATED);
+        state.setSessionKeys(deriveSessionKeys());
+
+        byte[] confirmation = calculateConfirmation(
+                state.getSessionKeys().getResponderConfirmation(),
+                "BeSafe-Finish-Responder-v1"
+        );
+
+        state.setStatus(HandshakeStatus.FINISH_SENT);
 
         return new ProtocolMessage(
                 MessageType.AUTHENTICATION_FINISH,
-                new byte[0]
+                confirmation
         );
     }
 
-    // Вызывается инициатором при получении финального подтверждения.
-    public void receiveAuthenticationFinish(
+    public ProtocolMessage receiveAuthenticationFinish(
             ProtocolMessage message
-    ) {
+    ) throws GeneralSecurityException, IOException {
         requireRole(HandshakeRole.INITIATOR);
         requireStatus(HandshakeStatus.RESPONSE_SENT);
         requireMessageType(
@@ -214,11 +226,83 @@ public class HandshakeService {
                 MessageType.AUTHENTICATION_FINISH
         );
 
-        if (message.getPayload().length != 0) {
+        byte[] receivedConfirmation = message.getPayload();
+
+        if (receivedConfirmation.length != 0) {
             fail("Authentication finish must have an empty payload");
         }
 
+        byte[] expectedConfirmation = calculateConfirmation(
+                state.getSessionKeys().getResponderConfirmation(),
+                "BeSafe-Finish-Responder-v1"
+        );
+
+        if (!MessageDigest.isEqual(
+                expectedConfirmation,
+                receivedConfirmation
+        )) {
+            fail("Responder key confirmation failed");
+        }
+
+        byte[] acknowledgement = calculateConfirmation(
+                state.getSessionKeys().getResponderConfirmation(),
+                "BeSafe-Finish-Initiator-v1"
+        );
+
         state.setStatus(HandshakeStatus.AUTHENTICATED);
+
+        return new ProtocolMessage(
+                MessageType.AUTHENTICATION_ACT,
+                acknowledgement
+        );
+    }
+
+    public void receiveAuthenticationAck(
+            ProtocolMessage message
+    ) throws GeneralSecurityException, IOException {
+        requireRole(HandshakeRole.RESPONDER);
+        requireStatus(HandshakeStatus.FINISH_SENT);
+        requireMessageType(message, MessageType.AUTHENTICATION_ACT);
+
+        byte[] receivedConfirmation = message.getPayload();
+
+        if (receivedConfirmation.length != 32) {
+            fail("Invalid authentication ack length");
+        }
+
+        byte[] expectedConfirmation = calculateConfirmation(
+                state.getSessionKeys().getResponderConfirmation(),
+                "BeSafe-Finish-Initiator-v1"
+        );
+
+        if (!MessageDigest.isEqual(
+                expectedConfirmation,
+                receivedConfirmation
+        )) {
+            fail("Initiator key confirmation failed");
+        }
+
+        state.setStatus(HandshakeStatus.AUTHENTICATED);
+    }
+
+    private byte[] calculateConfirmation(
+            byte[] key,
+            String context
+    ) throws GeneralSecurityException, IOException {
+        byte[] transcripthHash = MessageDigest.getInstance("SHA-256")
+                .digest(createTranscript().toByteArray());
+
+        Mac mac = Mac.getInstance("HmacSHA256");
+
+        try {
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            mac.update(context.getBytes(StandardCharsets.UTF_8));
+            mac.update(transcripthHash);
+
+            return mac.doFinal();
+        } finally {
+            Arrays.fill(key, (byte) 0);
+        }
     }
 
     private HandshakeTranscript createTranscript() {
@@ -372,6 +456,82 @@ public class HandshakeService {
         }
 
         return new ChallengeResponsePayload(nonce, publicKey, signature);
+    }
+
+    private HandshakeSessionKeys deriveSessionKeys() throws GeneralSecurityException, IOException {
+        KeyPair localKeyPair = state.getLocalEphemeralKeyPair();
+
+        byte[] sharedSecret = keyExchange.generateSharedSecret(
+                localKeyPair.getPrivate(),
+                state.getRemoteEphemeralPublicKey()
+        );
+
+        byte[] transcriptBytes = createTranscript().toByteArray();
+
+        byte[] transcriptHash = MessageDigest.getInstance("SHA-256").digest(transcriptBytes);
+
+        try {
+            byte[] initiatorToResponder = deriveKey(
+                    sharedSecret,
+                    transcriptHash,
+                    "initiator-to-responder"
+            );
+
+            byte[] responderToInitiator = deriveKey(
+                    sharedSecret,
+                    transcriptHash,
+                    "responder-to-initiator"
+            );
+
+            byte[] responderConfirmation = deriveKey(
+                    sharedSecret,
+                    transcriptHash,
+                    "responder-confirmation"
+            );
+
+            byte[] initiatorConfirmation = deriveKey(
+                    sharedSecret,
+                    transcriptHash,
+                    "initiator-confirmation"
+            );
+
+            try {
+                return new HandshakeSessionKeys(
+                        initiatorToResponder,
+                        responderToInitiator,
+                        responderConfirmation,
+                        initiatorConfirmation
+                );
+            } finally {
+                Arrays.fill(initiatorToResponder, (byte) 0);
+                Arrays.fill(responderToInitiator, (byte) 0);
+                Arrays.fill(responderConfirmation, (byte) 0);
+                Arrays.fill(initiatorConfirmation, (byte) 0);
+            }
+        } finally {
+            Arrays.fill(sharedSecret, (byte) 0);
+        }
+    }
+
+    private byte[] deriveKey(
+            byte[] sharedSecret,
+            byte[] transcriptHash,
+            String purpose
+    ) throws GeneralSecurityException {
+        byte[] label = (
+                "BeSafe-v1|" + purpose
+        ).getBytes(StandardCharsets.UTF_8);
+
+        byte[] info = new byte[label.length + transcriptHash.length];
+
+        System.arraycopy(label, 0, info, 0, label.length);
+        System.arraycopy(transcriptHash, 0, info, label.length, transcriptHash.length);
+
+        return keyDerivation.deriveKey(
+                sharedSecret,
+                transcriptHash,
+                info
+        );
     }
 
     private void validatePayloadParts(byte[] nonce, byte[] publicKey) {

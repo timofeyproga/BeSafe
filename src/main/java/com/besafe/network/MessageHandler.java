@@ -2,6 +2,6 @@ package com.besafe.network;
 
 public interface MessageHandler {
 
-    void onMessageReceived(String message);
+    void onMessageReceived(PeerConnection connection, byte[] message);
 
 }

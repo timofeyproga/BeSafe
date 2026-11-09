@@ -17,6 +17,8 @@ public class HandshakeState {
     private byte[] initiatorNonce;
     private byte[] responderNonce;
 
+    private HandshakeSessionKeys sessionKeys;
+
     public HandshakeState(HandshakeRole role) {
         if (role == null) {
             throw new IllegalArgumentException("Role cannot be null");
@@ -106,5 +108,17 @@ public class HandshakeState {
 
     public PublicKey getRemoteEphemeralPublicKey() {
         return remoteEphemeralPublicKey;
+    }
+
+    public void setSessionKeys(HandshakeSessionKeys sessionKeys) {
+        if (sessionKeys == null) {
+            throw new IllegalArgumentException("Session keys cannot be null");
+        }
+
+        this.sessionKeys = sessionKeys;
+    }
+
+    public HandshakeSessionKeys getSessionKeys() {
+        return sessionKeys;
     }
 }

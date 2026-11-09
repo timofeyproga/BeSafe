@@ -12,7 +12,8 @@ public enum MessageType {
     DISCONNECT(6),
 
     AUTHENTICATION_FINISH(7),
-    AUTHENTICATION_SIGNATURE(8);
+    AUTHENTICATION_SIGNATURE(8),
+    AUTHENTICATION_ACT(9);
 
     private final int code;
 

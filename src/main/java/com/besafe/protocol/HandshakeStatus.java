@@ -8,6 +8,7 @@ public enum HandshakeStatus {
     CHALLENGE_RECEIVED,
     RESPONSE_SENT,
     FINISH_SENT,
+    ACK_SENT,
     AUTHENTICATED,
     FAILED
 

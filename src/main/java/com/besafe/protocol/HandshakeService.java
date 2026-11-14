@@ -228,8 +228,8 @@ public class HandshakeService {
 
         byte[] receivedConfirmation = message.getPayload();
 
-        if (receivedConfirmation.length != 0) {
-            fail("Authentication finish must have an empty payload");
+        if (receivedConfirmation.length != 32) {
+            fail("Invalid authentication finish length");
         }
 
         byte[] expectedConfirmation = calculateConfirmation(
@@ -245,14 +245,14 @@ public class HandshakeService {
         }
 
         byte[] acknowledgement = calculateConfirmation(
-                state.getSessionKeys().getResponderConfirmation(),
+                state.getSessionKeys().getInitiatorConfirmation(),
                 "BeSafe-Finish-Initiator-v1"
         );
 
-        state.setStatus(HandshakeStatus.AUTHENTICATED);
+        state.setStatus(HandshakeStatus.ACK_SENT);
 
         return new ProtocolMessage(
-                MessageType.AUTHENTICATION_ACT,
+                MessageType.AUTHENTICATION_ACK,
                 acknowledgement
         );
     }
@@ -262,7 +262,7 @@ public class HandshakeService {
     ) throws GeneralSecurityException, IOException {
         requireRole(HandshakeRole.RESPONDER);
         requireStatus(HandshakeStatus.FINISH_SENT);
-        requireMessageType(message, MessageType.AUTHENTICATION_ACT);
+        requireMessageType(message, MessageType.AUTHENTICATION_ACK);
 
         byte[] receivedConfirmation = message.getPayload();
 
@@ -271,7 +271,7 @@ public class HandshakeService {
         }
 
         byte[] expectedConfirmation = calculateConfirmation(
-                state.getSessionKeys().getResponderConfirmation(),
+                state.getSessionKeys().getInitiatorConfirmation(),
                 "BeSafe-Finish-Initiator-v1"
         );
 
@@ -281,6 +281,13 @@ public class HandshakeService {
         )) {
             fail("Initiator key confirmation failed");
         }
+
+        state.setStatus(HandshakeStatus.AUTHENTICATED);
+    }
+
+    public void markAuthenticationAckSent() {
+        requireRole(HandshakeRole.INITIATOR);
+        requireStatus(HandshakeStatus.ACK_SENT);
 
         state.setStatus(HandshakeStatus.AUTHENTICATED);
     }

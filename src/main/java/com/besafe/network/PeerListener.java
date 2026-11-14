@@ -1,5 +1,6 @@
 package com.besafe.network;
 
+import java.io.EOFException;
 import java.io.IOException;
 
 public class PeerListener {
@@ -15,7 +16,7 @@ public class PeerListener {
         this.messageHandler = messageHandler;
     }
 
-    public void start() {
+    public synchronized void start() {
         if (running) {
             return;
         }
@@ -23,24 +24,21 @@ public class PeerListener {
         running = true;
 
         connectionThread = new Thread(() -> {
-            while (running) {
-                try {
+            try {
+                while (running) {
                     byte[] message = connection.receiveBytes();
 
-                    if (message == null) {
-                        running = false;
-                        return;
-                    }
-
                     messageHandler.onMessageReceived(connection, message);
-                } catch (IOException e) {
-                    if (running) {
-                        e.printStackTrace();
-                    }
-
-                    running = false;
-                    break;
                 }
+            } catch (EOFException ignored) {
+
+            } catch (IOException e) {
+                if (running) {
+                    e.printStackTrace();
+                }
+            } finally {
+                running = false;
+                messageHandler.onDisconnected(connection);
             }
         }, "BeSafe-PeerListener");
 
@@ -49,16 +47,19 @@ public class PeerListener {
     }
 
     public void stop() {
-        if (!running) {
-            return;
-        }
-
         running = false;
+
         try {
             connection.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (IOException ignored) {
+        }
+
+        if (connectionThread != null) {
+            connectionThread.interrupt();
         }
     }
 
+    public boolean isRunning() {
+        return running;
+    }
 }

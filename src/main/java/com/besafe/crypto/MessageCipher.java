@@ -16,10 +16,16 @@ public class MessageCipher {
     private static final int TAG_LENGTH = 128;
     private static final int KEY_LENGTH = 32;
 
+    private static final int MAX_PLAINTEXT_SIZE = 1_048_576 - IV_LENGTH - 16;
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     public byte[] encrypt(byte[] plaintext, byte[] key) throws GeneralSecurityException {
         validateInput(plaintext, key);
+
+        if (plaintext.length > MAX_PLAINTEXT_SIZE) {
+            throw new IllegalArgumentException("Data cannot be larger than " + MAX_PLAINTEXT_SIZE);
+        }
 
         byte[] iv = new byte[IV_LENGTH];
         RANDOM.nextBytes(iv);
@@ -49,6 +55,10 @@ public class MessageCipher {
 
     public byte[] decrypt(byte[] encrypted, byte[] key) throws GeneralSecurityException {
         validateInput(encrypted, key);
+
+        if (encrypted.length > 1_048_576) {
+            throw new GeneralSecurityException("Encrypted data is too large");
+        }
 
         if (encrypted.length < IV_LENGTH + 16) {
             throw new GeneralSecurityException("Encrypted data is too short");

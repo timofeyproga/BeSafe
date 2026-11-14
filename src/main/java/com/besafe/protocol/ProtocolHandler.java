@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ProtocolHandler implements MessageHandler {
 
     private final UserIdentity localIdentity;
+    private final ProtocolEvents events;
 
     private final Map<PeerConnection, ConnectionContext> connections =
             new ConcurrentHashMap<>();
@@ -23,11 +24,23 @@ public class ProtocolHandler implements MessageHandler {
 
 
     public ProtocolHandler(UserIdentity localIdentity) {
+        this(localIdentity, new ProtocolEvents() {});
+    }
+
+    public ProtocolHandler(
+            UserIdentity localIdentity,
+            ProtocolEvents events
+    ) {
         if (localIdentity == null) {
-            throw new NullPointerException("LocalIdentity is null");
+            throw new IllegalArgumentException("Local identity cannot be null");
+        }
+
+        if (events == null) {
+            throw new IllegalArgumentException("ProtocolEvents cannot be null");
         }
 
         this.localIdentity = localIdentity;
+        this.events = events;
     }
 
     public void startIdentityExchange(PeerConnection connection) throws IOException {
@@ -87,6 +100,7 @@ public class ProtocolHandler implements MessageHandler {
 
                 case DISCONNECT -> {
                     connections.remove(connection);
+                    events.onDisconnected(connection);
                     connection.close();
                 }
 
@@ -261,6 +275,13 @@ public class ProtocolHandler implements MessageHandler {
         ProtocolMessage ack = context.handshakeService.receiveAuthenticationFinish(message);
 
         send(connection, ack);
+
+        context.handshakeService.markAuthenticationAckSent();
+
+        events.onAuthenticated(
+                connection,
+                context.state.getRemoteIdentity()
+        );
     }
 
     private void handleAuthenticationAck(
@@ -275,6 +296,10 @@ public class ProtocolHandler implements MessageHandler {
         }
 
         context.handshakeService.receiveAuthenticationAck(message);
+        events.onAuthenticated(
+                connection,
+                context.state.getRemoteIdentity()
+        );
     }
 
     private void handleChatMessage(
@@ -306,12 +331,12 @@ public class ProtocolHandler implements MessageHandler {
 
             String text = new String(plaintext, StandardCharsets.UTF_8);
 
-            System.out.println(
-                    "Message from "
-                    + context.state.getRemoteIdentity().getUsername()
-                    + ": "
-                    + text
+            events.onMessageReceived(
+                    connection,
+                    context.state.getRemoteIdentity(),
+                    text
             );
+
         } finally {
             Arrays.fill(key, (byte) 0);
         }
@@ -360,6 +385,11 @@ public class ProtocolHandler implements MessageHandler {
 
         System.out.println("BeSafe protocol error: " + error.getMessage());
 
+        events.onError(
+                connection,
+                error.getMessage()
+        );
+
         try {
             connection.close();
         } catch (IOException ignored) {
@@ -368,7 +398,11 @@ public class ProtocolHandler implements MessageHandler {
 
     @Override
     public void onDisconnected(PeerConnection connection) {
-        connections.remove(connection);
+        ConnectionContext context = connections.remove(connection);
+
+        if (context != null) {
+            events.onDisconnected(connection);
+        }
     }
 
     private static class ConnectionContext {

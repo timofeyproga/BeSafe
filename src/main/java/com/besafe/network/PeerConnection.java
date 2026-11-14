@@ -10,7 +10,7 @@ public class PeerConnection implements AutoCloseable {
     private final DataInputStream input;
     private final DataOutputStream output;
 
-    private static final int MAX_MESSAGE_SIZE = 1_048_576;
+    private static final int MAX_MESSAGE_SIZE = 1_048_576 - 12 - 16 - 2;
 
     public PeerConnection(Socket socket) throws IOException {
         this.socket = socket;

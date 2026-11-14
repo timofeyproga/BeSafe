@@ -1,11 +1,14 @@
 package com.besafe.protocol;
 
+import com.besafe.crypto.MessageCipher;
 import com.besafe.identity.UserIdentity;
 import com.besafe.network.MessageHandler;
 import com.besafe.network.PeerConnection;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +18,9 @@ public class ProtocolHandler implements MessageHandler {
 
     private final Map<PeerConnection, ConnectionContext> connections =
             new ConcurrentHashMap<>();
+
+    private final MessageCipher messageCipher = new MessageCipher();
+
 
     public ProtocolHandler(UserIdentity localIdentity) {
         if (localIdentity == null) {
@@ -84,12 +90,55 @@ public class ProtocolHandler implements MessageHandler {
                     connection.close();
                 }
 
+                case CHAT_MESSAGE ->
+                    handleChatMessage(connection, message);
+
                 default ->
                     throw new IOException("Unsupported protocol message: " + message.getType());
 
             }
         } catch (IOException | GeneralSecurityException | RuntimeException e) {
             failConnection(connection, e);
+        }
+    }
+
+    public void sendChatMessage(
+            PeerConnection connection,
+            String text
+    ) throws IOException, GeneralSecurityException {
+
+        ConnectionContext context = getContext(connection);
+
+        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+            throw new IllegalStateException("Connection is not authenticated");
+        }
+
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Message cannot be null or blank");
+        }
+
+        HandshakeSessionKeys keys = context.state.getSessionKeys();
+
+        if (keys == null) {
+            throw new IllegalStateException("Session keys are unavailable");
+        }
+
+        byte[] key = context.initiator
+                ? keys.getInitiatorToResponder()
+                : keys.getResponderToInitiator();
+
+        try {
+            byte[] plaintext = text.getBytes(StandardCharsets.UTF_8);
+            byte[] encrypted = messageCipher.encrypt(plaintext, key);
+
+            ProtocolMessage message = new ProtocolMessage(
+                    MessageType.CHAT_MESSAGE,
+                    encrypted
+            );
+
+            send(connection, message);
+        } finally {
+           Arrays.fill(key, (byte) 0);
         }
     }
 
@@ -226,6 +275,46 @@ public class ProtocolHandler implements MessageHandler {
         }
 
         context.handshakeService.receiveAuthenticationAck(message);
+    }
+
+    private void handleChatMessage(
+            PeerConnection connection,
+            ProtocolMessage message
+    ) throws IOException, GeneralSecurityException {
+
+        ConnectionContext context = getContext(connection);
+
+        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+            throw new IOException("Received message before authentication");
+        }
+
+        HandshakeSessionKeys keys = context.state.getSessionKeys();
+
+        if (keys == null) {
+            throw new IOException("Session keys are unavailable");
+        }
+
+        byte[] key = context.initiator
+                ? keys.getResponderToInitiator()
+                : keys.getInitiatorToResponder();
+
+        try {
+            byte[] plaintext = messageCipher.decrypt(
+                    message.getPayload(),
+                    key
+            );
+
+            String text = new String(plaintext, StandardCharsets.UTF_8);
+
+            System.out.println(
+                    "Message from "
+                    + context.state.getRemoteIdentity().getUsername()
+                    + ": "
+                    + text
+            );
+        } finally {
+            Arrays.fill(key, (byte) 0);
+        }
     }
 
     private HandshakeService createHandshakeService(HandshakeState state) {

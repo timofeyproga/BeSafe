@@ -19,7 +19,7 @@ public class HandshakeSessionKeys {
         this.initiatorConfirmation = copyKey(initiatorConfirmation);
     }
 
-    public byte[] getInitiatorToResponer() {
+    public byte[] getInitiatorToResponder() {
         return initiatorToResponer.clone();
     }
 

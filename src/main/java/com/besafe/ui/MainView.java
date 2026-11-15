@@ -3,6 +3,10 @@ package com.besafe.ui;
 import com.besafe.conversation.Conversation;
 import com.besafe.conversation.ConversationService;
 import com.besafe.conversation.Message;
+import com.besafe.core.BeSafeRuntime;
+import com.besafe.network.PeerConnection;
+import com.besafe.protocol.IdentityPayload;
+import com.besafe.protocol.ProtocolEvents;
 import com.besafe.session.SessionManager;
 import com.besafe.ui.components.ChatHeader;
 import com.besafe.ui.components.ChatList;
@@ -10,6 +14,7 @@ import com.besafe.ui.components.MessageArea;
 import com.besafe.ui.components.MessageInput;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.*;
@@ -17,8 +22,9 @@ import javafx.scene.layout.*;
 import java.util.HashMap;
 import java.util.Map;
 
-public class MainView {
+public class MainView implements ProtocolEvents {
 
+    private final BeSafeRuntime runtime;
     private final ConversationService conversationService;
     private final Map<String, Conversation> conversationByUsername;
     private Conversation selectedConversation;
@@ -35,7 +41,7 @@ public class MainView {
     private final MessageArea messageArea;
     private final MessageInput messageInput;
 
-    public MainView(SessionManager sessionManager) {
+    public MainView(SessionManager sessionManager, BeSafeRuntime runtime) {
         root = new BorderPane();
         sidebar = new VBox();
         topBar = new StackPane();
@@ -54,7 +60,8 @@ public class MainView {
         actionBar.getStyleClass().add("chat-action-bar");
         chatArea.getStyleClass().add("chat-area");
 
-        conversationService = new ConversationService();
+        this.runtime = runtime;
+        conversationService = runtime.getConversationService();
         conversationByUsername = new HashMap<>();
 
         messageInput.setOnSend(content -> {
@@ -92,28 +99,6 @@ public class MainView {
             }
         });
 
-//        try {
-//            Conversation alex = conversationService.createPrivateConversation(
-//                    currentUserId, "alex-id"
-//            );
-//            conversationByUsername.put("alex", alex);
-//            chatList.addChat("alex");
-//
-//            Conversation bob = conversationService.createPrivateConversation(
-//                    currentUserId, "bob-id"
-//            );
-//            conversationByUsername.put("bob", bob);
-//            chatList.addChat("bob");
-//
-//            Conversation chris = conversationService.createPrivateConversation(
-//                    currentUserId, "chris-id"
-//            );
-//            conversationByUsername.put("chris", chris);
-//            chatList.addChat("chris");
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-
         sidebar.setPrefWidth(260);
 
         root.setTop(topBar);
@@ -128,7 +113,7 @@ public class MainView {
         Label lblBeSafe = new Label("BeSafe");
         lblBeSafe.getStyleClass().add("app-title");
 
-        Label lblVersion = new Label("0.0.4");
+        Label lblVersion = new Label("0.0.5");
         lblVersion.getStyleClass().add("lbl-version");
 
         VBox appBrand =  new VBox(lblBeSafe, lblVersion);
@@ -178,6 +163,88 @@ public class MainView {
 
     public BorderPane getRoot() {
         return root;
+    }
+
+    @Override
+    public void onAuthenticated(
+            PeerConnection connection,
+            IdentityPayload remoteIdentity
+    ) {
+        String username = remoteIdentity.getUsername();
+        String peerId = remoteIdentity.getUserId();
+
+        getOrCreateConversation(username, peerId);
+
+        System.out.println("Authenticated: " + username);
+    }
+
+    @Override
+    public void onMessageReceived(
+            PeerConnection connection,
+            IdentityPayload identity,
+            String content
+    ) {
+        String username = identity.getUsername();
+        String peerId = identity.getUserId();
+
+        Conversation conversation = getOrCreateConversation(
+                username,
+                peerId
+        );
+
+        conversationService.sendMessage(
+                conversation.getId(),
+                peerId,
+                content
+        );
+
+        if (selectedConversation != null
+        && selectedConversation.getId().equals(conversation.getId())) {
+            messageArea.addMessage(content, false);
+        }
+
+    }
+
+    @Override
+    public void onDisconnected(PeerConnection connection) {
+        System.out.println("Disconnected: " + connection);
+    }
+
+    @Override
+    public void onError(
+            PeerConnection connection,
+            String error
+    ) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("BeSafe");
+        alert.setHeaderText("Network error");
+        alert.setContentText(error);
+        alert.show();
+    }
+
+    private Conversation getOrCreateConversation(
+            String username,
+            String peerId
+    ) {
+        Conversation conversation = conversationByUsername.get(username);
+
+        if (conversation != null) {
+            return conversation;
+        }
+
+        try {
+            conversation = conversationService.createPrivateConversation(
+                    currentUserId,
+                    peerId
+            );
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        conversationByUsername.put(username, conversation);
+        chatList.addChat(username);
+
+        return conversation;
     }
 
 }

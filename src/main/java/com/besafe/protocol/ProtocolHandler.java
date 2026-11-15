@@ -22,7 +22,6 @@ public class ProtocolHandler implements MessageHandler {
 
     private final MessageCipher messageCipher = new MessageCipher();
 
-
     public ProtocolHandler(UserIdentity localIdentity) {
         this(localIdentity, new ProtocolEvents() {});
     }
@@ -122,6 +121,10 @@ public class ProtocolHandler implements MessageHandler {
     ) throws IOException, GeneralSecurityException {
 
         ConnectionContext context = getContext(connection);
+
+        if (!context.trusted) {
+            throw new IOException("Cannot send messages to an untrusted peer");
+        }
 
         if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
             throw new IllegalStateException("Connection is not authenticated");
@@ -309,6 +312,10 @@ public class ProtocolHandler implements MessageHandler {
 
         ConnectionContext context = getContext(connection);
 
+        if (!context.trusted) {
+            return;
+        }
+
         if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
             throw new IOException("Received message before authentication");
         }
@@ -396,6 +403,16 @@ public class ProtocolHandler implements MessageHandler {
         }
     }
 
+    public void trustConnection(PeerConnection connection) throws IOException {
+        ConnectionContext context = getContext(connection);
+
+        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+            throw new IOException("Cannot trust connection before authentication");
+        }
+
+        context.trusted = true;
+    }
+
     @Override
     public void onDisconnected(PeerConnection connection) {
         ConnectionContext context = connections.remove(connection);
@@ -411,6 +428,8 @@ public class ProtocolHandler implements MessageHandler {
         private final boolean initiator;
 
         private HandshakeService handshakeService;
+
+        private boolean trusted = false;
 
         public ConnectionContext(
                 HandshakeState state,

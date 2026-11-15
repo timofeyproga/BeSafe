@@ -6,7 +6,7 @@
 
     <groupId>com.besafe</groupId>
     <artifactId>besafe</artifactId>
-    <version>0.0.5</version>
+    <version>0.1.0-alpha-1</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -37,6 +37,29 @@
                 <configuration>
                     <mainClass>com.besafe.Main</mainClass>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+
+                <executions>
+                    <execution>
+                        <id>copy-runtime-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <outputDirectory>
+                                ${project.build.directory}/jpackage-input
+                            </outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

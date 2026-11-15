@@ -4,6 +4,7 @@ import com.besafe.conversation.Conversation;
 import com.besafe.conversation.ConversationService;
 import com.besafe.conversation.Message;
 import com.besafe.core.BeSafeRuntime;
+import com.besafe.network.PeerAddress;
 import com.besafe.network.PeerConnection;
 import com.besafe.protocol.IdentityPayload;
 import com.besafe.protocol.ProtocolEvents;
@@ -14,9 +15,7 @@ import com.besafe.ui.components.MessageArea;
 import com.besafe.ui.components.MessageInput;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
+import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.util.HashMap;
@@ -26,7 +25,11 @@ public class MainView implements ProtocolEvents {
 
     private final BeSafeRuntime runtime;
     private final ConversationService conversationService;
+
     private final Map<String, Conversation> conversationByUsername;
+    private final Map<String, PeerConnection> connectionsByUserId = new HashMap<>();
+    private final Map<String, String> peerIdByConversationId = new HashMap<>();
+
     private Conversation selectedConversation;
 
     private final String currentUserId;
@@ -69,13 +72,42 @@ public class MainView implements ProtocolEvents {
                 return;
             }
 
-            Message message = conversationService.sendMessage(
-                    selectedConversation.getId(),
-                    currentUserId,
-                    content
-            );
+            String peerId = peerIdByConversationId.get(selectedConversation.getId());
 
-            messageArea.addMessage(message.getContent(), true);
+            if (peerId == null) {
+                System.out.println("Peer ID not found");
+                return;
+            }
+
+            PeerConnection connection = connectionsByUserId.get(peerId);
+
+            if (connection == null) {
+                new Alert(
+                        Alert.AlertType.WARNING,
+                        "The user is not connected."
+                ).showAndWait();
+
+                return;
+            }
+
+            try {
+                runtime.sendMessage(connection, content);
+
+                Message message = conversationService.sendMessage(
+                        selectedConversation.getId(),
+                        currentUserId,
+                        content
+                );
+
+                messageArea.addMessage(content, true);
+            } catch (Exception e) {
+                new Alert(
+                        Alert.AlertType.ERROR,
+                        "Failed to send message: " + e.getMessage()
+                ).showAndWait();
+
+                e.printStackTrace();
+            }
         });
 
         chatArea.setCenter(messageArea.getRoot());
@@ -113,7 +145,7 @@ public class MainView implements ProtocolEvents {
         Label lblBeSafe = new Label("BeSafe");
         lblBeSafe.getStyleClass().add("app-title");
 
-        Label lblVersion = new Label("0.0.5");
+        Label lblVersion = new Label("0.1.0-alpha-1");
         lblVersion.getStyleClass().add("lbl-version");
 
         VBox appBrand =  new VBox(lblBeSafe, lblVersion);
@@ -147,6 +179,7 @@ public class MainView implements ProtocolEvents {
         topBar.setPrefHeight(72);
 
         Button btnAddPrivate = new Button("+");
+        btnAddPrivate.setOnAction(event -> showAddPrivateChat());
         btnAddPrivate.getStyleClass().add("chat-action-button");
 
         Button btnAddGroup = new Button("♟");
@@ -173,9 +206,61 @@ public class MainView implements ProtocolEvents {
         String username = remoteIdentity.getUsername();
         String peerId = remoteIdentity.getUserId();
 
-        getOrCreateConversation(username, peerId);
+        String fingerprint;
 
-        System.out.println("Authenticated: " + username);
+        try {
+            fingerprint = calculateFingerprint(
+                    remoteIdentity.getPublicKey()
+            );
+        } catch (Exception e) {
+            showIdentityError("Could not calculate fingerprint", e);
+            runtime.disconnect(connection);
+            return;
+        }
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+
+        alert.setTitle("BeSafe");
+        alert.setHeaderText("Confirm peer identity");
+
+        alert.setContentText(
+                "A user wants to establish a private conversation.\n\n"
+                + "Username: " + username + "\n\n"
+                + "User ID:\n" + peerId + "\n\n"
+                + "SHA-256 fingerprint:\n" + fingerprint + "\n\n"
+                + "Compare this fingerprint with the one "
+                + "provided by the other user through an "
+                + "independent communicative channel."
+        );
+
+        ButtonType trustButton = new ButtonType("Trust");
+        ButtonType rejectButton = new ButtonType("Reject");
+
+        alert.getButtonTypes().setAll(
+                trustButton,
+                rejectButton
+        );
+
+        alert.showAndWait().ifPresent(result -> {
+            if (result != trustButton) {
+                runtime.disconnect(connection);
+                return;
+            }
+
+            try {
+                runtime.trustConnection(connection);
+                connectionsByUserId.put(peerId, connection);
+
+                getOrCreateConversation(username, peerId);
+
+                System.out.println(
+                        "Trusted peer: " + username
+                );
+            } catch (Exception e) {
+                showIdentityError("Failed to trust peer", e);
+                runtime.disconnect(connection);
+            }
+        });
     }
 
     @Override
@@ -207,7 +292,11 @@ public class MainView implements ProtocolEvents {
 
     @Override
     public void onDisconnected(PeerConnection connection) {
-        System.out.println("Disconnected: " + connection);
+        connectionsByUserId.values().removeIf(
+                activeConnection -> activeConnection == connection
+        );
+
+        System.out.println("Peer disconnected");
     }
 
     @Override
@@ -229,6 +318,7 @@ public class MainView implements ProtocolEvents {
         Conversation conversation = conversationByUsername.get(username);
 
         if (conversation != null) {
+            peerIdByConversationId.put(conversation.getId(), peerId);
             return conversation;
         }
 
@@ -242,9 +332,97 @@ public class MainView implements ProtocolEvents {
         }
 
         conversationByUsername.put(username, conversation);
+        peerIdByConversationId.put(conversation.getId(), peerId);
+
         chatList.addChat(username);
 
         return conversation;
+    }
+
+    private void showAddPrivateChat() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+
+        dialog.setTitle("BeSafe");
+        dialog.setHeaderText("Connect to another BeSafe user");
+
+        ButtonType connectButton = new ButtonType(
+                "Connect",
+                ButtonBar.ButtonData.OK_DONE
+        );
+
+        dialog.getDialogPane().getButtonTypes().addAll(
+                connectButton,
+                ButtonType.CANCEL
+        );
+
+        TextField hostField = new TextField();
+        hostField.setPromptText("IP Address");
+
+        TextField portField = new TextField("45821");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(12);
+        grid.setPadding(new Insets(20));
+
+        grid.add(new Label("IP Address:"), 0, 0);
+        grid.add(hostField, 1, 0);
+
+        grid.add(new Label("Port:"), 0, 1);
+        grid.add(portField, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.showAndWait().ifPresent(result -> {
+            if (result != connectButton) {
+                return;
+            }
+
+            try {
+                String host = hostField.getText();
+                int port = Integer.parseInt(portField.getText().trim());
+
+                PeerAddress address = new PeerAddress(host, port);
+
+                PeerConnection connection = runtime.connect(
+                        address
+                );
+
+                System.out.println(
+                        "Connection initiated: " + host + ":" + port
+                );
+            } catch (Exception e) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("BeSafe");
+                alert.setHeaderText("Connection failed");
+                alert.setContentText(e.getMessage());
+                alert.showAndWait();
+            }
+        });
+    }
+
+    private String calculateFingerprint(java.security.PublicKey publicKey)
+            throws java.security.GeneralSecurityException {
+
+        java.security.MessageDigest digest =
+                java.security.MessageDigest.getInstance("SHA-256");
+
+        byte[] hash = digest.digest(publicKey.getEncoded());
+
+        return java.util.HexFormat.ofDelimiter(":")
+                .withUpperCase()
+                .formatHex(hash);
+    }
+
+    private void showIdentityError(
+            String title,
+            Exception e
+    ) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("BeSafe");
+        alert.setHeaderText(title);
+        alert.setContentText(e.getMessage());
+        alert.show();
     }
 
 }

@@ -68,6 +68,21 @@ public class BeSafeRuntime implements AutoCloseable {
 
     }
 
+    public void sendMessage(
+            PeerConnection connection,
+            String message
+    ) throws IOException, GeneralSecurityException {
+        protocolHandler.sendChatMessage(connection, message);
+    }
+
+    public void disconnect(PeerConnection connection) {
+        networkManager.disconnect(connection);
+    }
+
+    public void trustConnection(PeerConnection connection) throws IOException{
+        protocolHandler.trustConnection(connection);
+    }
+
     public UserIdentity getLocalIdentity() {
         return localIdentity;
     }

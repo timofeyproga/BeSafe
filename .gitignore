@@ -32,3 +32,5 @@ identity.dat
 # OS
 .DS_Store
 Thumbs.db
+
+.installer/

@@ -145,7 +145,7 @@ public class MainView implements ProtocolEvents {
         Label lblBeSafe = new Label("BeSafe");
         lblBeSafe.getStyleClass().add("app-title");
 
-        Label lblVersion = new Label("0.1.0-alpha-1");
+        Label lblVersion = new Label("0.1.0-alpha-2");
         lblVersion.getStyleClass().add("lbl-version");
 
         VBox appBrand =  new VBox(lblBeSafe, lblVersion);

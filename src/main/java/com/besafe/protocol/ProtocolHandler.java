@@ -369,7 +369,7 @@ public class ProtocolHandler implements MessageHandler {
     private ConnectionContext getContext(PeerConnection connection) throws IOException {
         ConnectionContext context = connections.get(connection);
 
-        if (context == null || context.handshakeService == null) {
+        if (context == null) {
             throw new IOException("No active handshake for this connection");
         }
 

@@ -14,6 +14,7 @@ import com.besafe.ui.components.ChatList;
 import com.besafe.ui.components.MessageArea;
 import com.besafe.ui.components.MessageInput;
 import com.besafe.ui.dialogs.AddContactDialog;
+import com.besafe.ui.dialogs.TrustConnectionDialog;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -225,49 +226,31 @@ public class MainView implements ProtocolEvents {
             return;
         }
 
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-
-        alert.setTitle("BeSafe");
-        alert.setHeaderText("Confirm peer identity");
-
-        alert.setContentText(
-                "A user wants to establish a private conversation.\n\n"
-                + "Username: " + username + "\n\n"
-                + "User ID:\n" + peerId + "\n\n"
-                + "SHA-256 fingerprint:\n" + fingerprint + "\n\n"
-                + "Compare this fingerprint with the one "
-                + "provided by the other user through an "
-                + "independent communicative channel."
+        boolean trusted = TrustConnectionDialog.showAndWait(
+                root.getScene().getWindow(),
+                username,
+                peerId,
+                fingerprint
         );
 
-        ButtonType trustButton = new ButtonType("Trust");
-        ButtonType rejectButton = new ButtonType("Reject");
+        if (!trusted) {
+            runtime.disconnect(connection);
+            return;
+        }
 
-        alert.getButtonTypes().setAll(
-                trustButton,
-                rejectButton
-        );
+        try {
+            runtime.trustConnection(connection);
+            connectionsByUserId.put(peerId, connection);
 
-        alert.showAndWait().ifPresent(result -> {
-            if (result != trustButton) {
-                runtime.disconnect(connection);
-                return;
-            }
+            getOrCreateConversation(username, peerId);
 
-            try {
-                runtime.trustConnection(connection);
-                connectionsByUserId.put(peerId, connection);
-
-                getOrCreateConversation(username, peerId);
-
-                System.out.println(
-                        "Trusted peer: " + username
-                );
-            } catch (Exception e) {
-                showIdentityError("Failed to trust peer", e);
-                runtime.disconnect(connection);
-            }
-        });
+            System.out.println(
+                    "Trusted peer: " + username
+            );
+        } catch (Exception e) {
+            showIdentityError("Failed to trust peer", e);
+            runtime.disconnect(connection);
+        }
     }
 
     @Override

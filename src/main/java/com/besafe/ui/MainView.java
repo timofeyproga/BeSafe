@@ -13,6 +13,7 @@ import com.besafe.ui.components.ChatHeader;
 import com.besafe.ui.components.ChatList;
 import com.besafe.ui.components.MessageArea;
 import com.besafe.ui.components.MessageInput;
+import com.besafe.ui.dialogs.AddContactDialog;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -206,6 +207,12 @@ public class MainView implements ProtocolEvents {
         String username = remoteIdentity.getUsername();
         String peerId = remoteIdentity.getUserId();
 
+        if (currentUserId.equals(peerId)) {
+            showIdentityError("You cannot connect to yourself");
+            runtime.disconnect(connection);
+            return;
+        }
+
         String fingerprint;
 
         try {
@@ -340,65 +347,18 @@ public class MainView implements ProtocolEvents {
     }
 
     private void showAddPrivateChat() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-
-        dialog.setTitle("BeSafe");
-        dialog.setHeaderText("Connect to another BeSafe user");
-
-        ButtonType connectButton = new ButtonType(
-                "Connect",
-                ButtonBar.ButtonData.OK_DONE
-        );
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                connectButton,
-                ButtonType.CANCEL
-        );
-
-        TextField hostField = new TextField();
-        hostField.setPromptText("IP Address");
-
-        TextField portField = new TextField("45821");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(12);
-        grid.setPadding(new Insets(20));
-
-        grid.add(new Label("IP Address:"), 0, 0);
-        grid.add(hostField, 1, 0);
-
-        grid.add(new Label("Port:"), 0, 1);
-        grid.add(portField, 1, 1);
-
-        dialog.getDialogPane().setContent(grid);
-
-        dialog.showAndWait().ifPresent(result -> {
-            if (result != connectButton) {
-                return;
-            }
-
-            try {
-                String host = hostField.getText();
-                int port = Integer.parseInt(portField.getText().trim());
-
-                PeerAddress address = new PeerAddress(host, port);
-
-                PeerConnection connection = runtime.connect(
-                        address
-                );
-
-                System.out.println(
-                        "Connection initiated: " + host + ":" + port
-                );
-            } catch (Exception e) {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("BeSafe");
-                alert.setHeaderText("Connection failed");
-                alert.setContentText(e.getMessage());
-                alert.showAndWait();
-            }
-        });
+        AddContactDialog.showAndWait(root.getScene().getWindow())
+                .ifPresent(address -> {
+                    try {
+                        PeerConnection connection = runtime.connect(address);
+                    } catch (Exception e) {
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("BeSafe");
+                        alert.setHeaderText("Connection failed");
+                        alert.setContentText(e.getMessage());
+                        alert.showAndWait();
+                    }
+                });
     }
 
     private String calculateFingerprint(java.security.PublicKey publicKey)
@@ -422,6 +382,16 @@ public class MainView implements ProtocolEvents {
         alert.setTitle("BeSafe");
         alert.setHeaderText(title);
         alert.setContentText(e.getMessage());
+        alert.show();
+    }
+
+    private void showIdentityError(
+            String e
+    ) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("BeSafe");
+        alert.setHeaderText("Connection failed");
+        alert.setContentText(e);
         alert.show();
     }
 

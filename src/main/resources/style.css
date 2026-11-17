@@ -429,3 +429,53 @@
     -fx-background-color: #252540;
     -fx-border-color: #397BCB;
 }
+
+/* =================================
+   ADD CONTACT DIALOG
+   ================================= */
+
+.add-contact-root {
+    -fx-background-color: #10101F;
+    -fx-padding: 20px;
+}
+
+.add-contact-root .label {
+    -fx-text-fill: #D1D5DB;
+}
+
+.add-contact-root .text-field {
+    -fx-pref-width: 230px;
+    -fx-background-color: #1F2937;
+    -fx-text-fill: #F9FAFB;
+    -fx-prompt-text-fill: #9CA3AF;
+    -fx-background-radius: 6px;
+}
+
+.dialog-error {
+    -fx-text-fill: #F87171;
+    -fx-font-size: 12px;
+}
+
+.dialog-primary-button {
+    -fx-background-color: #2563EB;
+    -fx-text-fill: white;
+    -fx-background-radius: 7px;
+    -fx-padding: 8px 18px;
+    -fx-cursor: hand;
+}
+
+.dialog-primary-button:hover {
+    -fx-background-color: #1D4ED8;
+}
+
+.dialog-secondary-button {
+    -fx-background-color: #27273A;
+    -fx-text-fill: #D1D5DB;
+    -fx-background-radius: 7px;
+    -fx-padding: 8px 18px;
+    -fx-cursor: hand;
+}
+
+.dialog-secondary-button:hover {
+    -fx-background-color: #383850;
+}

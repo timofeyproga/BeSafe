@@ -21,6 +21,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class MainView implements ProtocolEvents {
@@ -28,7 +29,7 @@ public class MainView implements ProtocolEvents {
     private final BeSafeRuntime runtime;
     private final ConversationService conversationService;
 
-    private final Map<String, Conversation> conversationByUsername;
+    private final Map<String, Conversation> conversationByUserId;
     private final Map<String, PeerConnection> connectionsByUserId = new HashMap<>();
     private final Map<String, String> peerIdByConversationId = new HashMap<>();
 
@@ -67,7 +68,7 @@ public class MainView implements ProtocolEvents {
 
         this.runtime = runtime;
         conversationService = runtime.getConversationService();
-        conversationByUsername = new HashMap<>();
+        conversationByUserId = new HashMap<>();
 
         messageInput.setOnSend(content -> {
             if (selectedConversation == null) {
@@ -115,22 +116,16 @@ public class MainView implements ProtocolEvents {
         chatArea.setCenter(messageArea.getRoot());
         chatArea.setBottom(messageInput.getRoot());
 
-        chatList.setOnChatSelected(username -> {
-            selectedConversation = conversationByUsername.get(username);
+        chatList.setOnChatSelected(userId -> {
+            Conversation conversation = conversationByUserId.get(userId);
 
-            if (selectedConversation == null) {
-                System.out.println("Conversation is null");
+            if (conversation == null) {
                 return;
             }
 
-            chatHeader.setUsername(username);
-            messageArea.clearMessages();
-
-            for (Message message : selectedConversation.getMessages()) {
-                boolean ownMessage = message.getSenderId().equals(currentUserId);
-
-                messageArea.addMessage(message.getContent(), ownMessage);
-            }
+            selectedConversation = conversation;
+            chatHeader.setUsername(conversation.getName());
+            renderMessages(conversation);
         });
 
         sidebar.setPrefWidth(260);
@@ -147,7 +142,7 @@ public class MainView implements ProtocolEvents {
         Label lblBeSafe = new Label("BeSafe");
         lblBeSafe.getStyleClass().add("app-title");
 
-        Label lblVersion = new Label("0.1.0-alpha-2");
+        Label lblVersion = new Label("0.1.0-alpha-3");
         lblVersion.getStyleClass().add("lbl-version");
 
         VBox appBrand =  new VBox(lblBeSafe, lblVersion);
@@ -234,19 +229,18 @@ public class MainView implements ProtocolEvents {
         );
 
         if (!trusted) {
-            runtime.disconnect(connection);
+            try {
+                runtime.rejectConnection(connection);
+            } catch (Exception e) {
+                runtime.disconnect(connection);
+                System.err.println("Failed to reject connection: " + e.getMessage());
+            }
             return;
         }
 
         try {
             runtime.trustConnection(connection);
-            connectionsByUserId.put(peerId, connection);
-
-            getOrCreateConversation(username, peerId);
-
-            System.out.println(
-                    "Trusted peer: " + username
-            );
+            System.out.println("Trusted peer: " + username);
         } catch (Exception e) {
             showIdentityError("Failed to trust peer", e);
             runtime.disconnect(connection);
@@ -262,10 +256,15 @@ public class MainView implements ProtocolEvents {
         String username = identity.getUsername();
         String peerId = identity.getUserId();
 
-        Conversation conversation = getOrCreateConversation(
-                username,
-                peerId
-        );
+        Conversation conversation = conversationByUserId.get(peerId);
+
+        if (conversation == null) {
+            System.err.println(
+                    "Received message without an existing conversation: "
+                            + username
+            );
+            return;
+        }
 
         conversationService.sendMessage(
                 conversation.getId(),
@@ -274,10 +273,9 @@ public class MainView implements ProtocolEvents {
         );
 
         if (selectedConversation != null
-        && selectedConversation.getId().equals(conversation.getId())) {
+                && selectedConversation.getId().equals(conversation.getId())) {
             messageArea.addMessage(content, false);
         }
-
     }
 
     @Override
@@ -301,11 +299,49 @@ public class MainView implements ProtocolEvents {
         alert.show();
     }
 
+    @Override
+    public void onTrustEstablished(
+            PeerConnection connection,
+            IdentityPayload remoteIdentity
+    ) {
+        String username = remoteIdentity.getUsername();
+        String peerId = remoteIdentity.getUserId();
+
+        PeerConnection existing = connectionsByUserId.putIfAbsent(
+                peerId,
+                connection
+        );
+
+        if (existing != null && existing != connection) {
+            System.out.println("Duplicate connection rejected: " + username);
+            runtime.disconnect(connection);
+            return;
+        }
+
+        try {
+            connectionsByUserId.put(peerId, connection);
+
+            Conversation conversation = getOrCreateConversation(username, peerId);
+
+            if (conversation == null) {
+                throw new IllegalStateException("Failed to get conversation");
+            }
+
+            System.out.println("Mutual trust established: " + username);
+        } catch (Exception e) {
+            connectionsByUserId.remove(peerId, connection);
+
+            showIdentityError("Failed to establish conversation", e);
+
+            runtime.disconnect(connection);
+        }
+    }
+
     private Conversation getOrCreateConversation(
             String username,
             String peerId
     ) {
-        Conversation conversation = conversationByUsername.get(username);
+        Conversation conversation = conversationByUserId.get(peerId);
 
         if (conversation != null) {
             peerIdByConversationId.put(conversation.getId(), peerId);
@@ -317,14 +353,24 @@ public class MainView implements ProtocolEvents {
                     currentUserId,
                     peerId
             );
-        } catch (Exception ex) {
-            ex.printStackTrace();
+
+            if (conversation == null) {
+                throw new IllegalStateException(
+                        "ConversationService returned null"
+                );
+            }
+
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Could not create private conversation",
+                    e
+            );
         }
 
-        conversationByUsername.put(username, conversation);
+        conversationByUserId.put(peerId, conversation);
         peerIdByConversationId.put(conversation.getId(), peerId);
 
-        chatList.addChat(username);
+        chatList.addChat(peerId, username);
 
         return conversation;
     }
@@ -376,6 +422,19 @@ public class MainView implements ProtocolEvents {
         alert.setHeaderText("Connection failed");
         alert.setContentText(e);
         alert.show();
+    }
+
+    private void renderMessages(Conversation conversation) {
+        messageArea.clearMessages();
+
+        for (Message message : conversation.getMessages()) {
+            boolean ownMessage = message.getSenderId().equals(currentUserId);
+
+            messageArea.addMessage(
+                    message.getContent(),
+                    ownMessage
+            );
+        }
     }
 
 }

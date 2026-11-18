@@ -13,7 +13,10 @@ public enum MessageType {
 
     AUTHENTICATION_FINISH(7),
     AUTHENTICATION_SIGNATURE(8),
-    AUTHENTICATION_ACK(9);
+    AUTHENTICATION_ACK(9),
+
+    TRUST_ACCEPT(10),
+    TRUST_REJECT(11);
 
     private final int code;
 

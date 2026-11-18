@@ -65,4 +65,17 @@ public class JavaFxProtocolEvents implements ProtocolEvents {
         });
     }
 
+    @Override
+    public void onTrustEstablished(
+            PeerConnection connection,
+            IdentityPayload remoteIdentity
+    ) {
+        Platform.runLater(() -> {
+            ProtocolEvents current = listener;
+            if (current != null) {
+                current.onTrustEstablished(connection, remoteIdentity);
+            }
+        });
+    }
+
 }

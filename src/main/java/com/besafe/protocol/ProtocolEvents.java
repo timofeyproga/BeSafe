@@ -26,4 +26,10 @@ public interface ProtocolEvents {
     ) {
     }
 
+    default void onTrustEstablished(
+            PeerConnection connection,
+            IdentityPayload remoteIdentity
+    ) {
+    }
+
 }

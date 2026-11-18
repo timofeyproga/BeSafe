@@ -14,6 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ProtocolHandler implements MessageHandler {
 
+    private static final String TRUST_ACCEPT_PAYLOAD =
+            "BeSafe-Trust-v1:ACCEPT";
+
+    private static final String TRUST_REJECT_PAYLOAD =
+            "BeSafe-Trust-v1:REJECT";
+
     private final UserIdentity localIdentity;
     private final ProtocolEvents events;
 
@@ -106,6 +112,12 @@ public class ProtocolHandler implements MessageHandler {
                 case CHAT_MESSAGE ->
                     handleChatMessage(connection, message);
 
+                case TRUST_ACCEPT ->
+                    handleTrustAccept(connection, message);
+
+                case TRUST_REJECT ->
+                    handleTrustReject(connection, message);
+
                 default ->
                     throw new IOException("Unsupported protocol message: " + message.getType());
 
@@ -120,43 +132,39 @@ public class ProtocolHandler implements MessageHandler {
             String text
     ) throws IOException, GeneralSecurityException {
 
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Message text cannot be null or blank");
+        }
+
         ConnectionContext context = getContext(connection);
 
-        if (!context.trusted) {
-            throw new IOException("Cannot send messages to an untrusted peer");
-        }
+        synchronized (context) {
+            if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                throw new IOException("Connection is not authenticated");
+            }
 
-        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
-            throw new IllegalStateException("Connection is not authenticated");
-        }
+            if (!isMutuallyTrusted(context)) {
+                throw new IOException("Cannot send messages before mutual trust is established");
+            }
 
-        if (text == null || text.isBlank()) {
-            throw new IllegalArgumentException("Message cannot be null or blank");
-        }
-
-        HandshakeSessionKeys keys = context.state.getSessionKeys();
-
-        if (keys == null) {
-            throw new IllegalStateException("Session keys are unavailable");
-        }
-
-        byte[] key = context.initiator
-                ? keys.getInitiatorToResponder()
-                : keys.getResponderToInitiator();
-
-        try {
+            byte[] key = getOutboundKey(context);
             byte[] plaintext = text.getBytes(StandardCharsets.UTF_8);
-            byte[] encrypted = messageCipher.encrypt(plaintext, key);
 
-            ProtocolMessage message = new ProtocolMessage(
-                    MessageType.CHAT_MESSAGE,
-                    encrypted
-            );
+            try {
+                byte[] encrypted = messageCipher.encrypt(plaintext, key);
 
-            send(connection, message);
-        } finally {
-           Arrays.fill(key, (byte) 0);
+                ProtocolMessage message = new ProtocolMessage(
+                        MessageType.CHAT_MESSAGE,
+                        encrypted
+                );
+
+                send(connection, message);
+            } finally {
+                Arrays.fill(key, (byte) 0);
+                Arrays.fill(plaintext, (byte) 0);
+            }
         }
+
     }
 
     private void handleIdentityRequest(
@@ -312,41 +320,230 @@ public class ProtocolHandler implements MessageHandler {
 
         ConnectionContext context = getContext(connection);
 
-        if (!context.trusted) {
-            return;
+        String text;
+
+        synchronized (context) {
+            if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                throw new IOException("Received message before authentication");
+            }
+
+            if (!isMutuallyTrusted(context)) {
+                throw new IOException("Received message before mutually trust");
+            }
+
+            byte[] key = getInboundKey(context);
+            byte[] plaintext;
+
+            try {
+                plaintext = messageCipher.decrypt(
+                        message.getPayload(),
+                        key
+                );
+            } finally {
+                Arrays.fill(key, (byte) 0);
+            }
+
+            try {
+                text = new String(plaintext, StandardCharsets.UTF_8);
+            } finally {
+                Arrays.fill(plaintext, (byte) 0);
+            }
         }
 
-        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
-            throw new IOException("Received message before authentication");
-        }
+        events.onMessageReceived(
+                connection,
+                context.state.getRemoteIdentity(),
+                text
+        );
+    }
 
-        HandshakeSessionKeys keys = context.state.getSessionKeys();
+    public void handleTrustAccept(
+            PeerConnection connection,
+            ProtocolMessage message
+    ) throws IOException, GeneralSecurityException {
 
-        if (keys == null) {
-            throw new IOException("Session keys are unavailable");
-        }
+        ConnectionContext context = getContext(connection);
 
-        byte[] key = context.initiator
-                ? keys.getResponderToInitiator()
-                : keys.getInitiatorToResponder();
+        boolean established = false;
+        boolean ignored = false;
+
+        byte[] key = null;
+        byte[] plaintext = null;
 
         try {
-            byte[] plaintext = messageCipher.decrypt(
-                    message.getPayload(),
-                    key
-            );
+            synchronized (context) {
+                if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                    throw new IOException("Received TRUST_ACCEPT before authentication");
+                }
 
-            String text = new String(plaintext, StandardCharsets.UTF_8);
+                if (context.rejected || connections.get(connection) != context) {
+                    ignored = true;
+                } else {
+                    key = getInboundKey(context);
+                    plaintext = messageCipher.decrypt(message.getPayload(), key);
 
-            events.onMessageReceived(
+                    String payload = new String(
+                            plaintext,
+                            StandardCharsets.UTF_8
+                    );
+
+                    if (!TRUST_ACCEPT_PAYLOAD.equals(payload)) {
+                        throw new IOException("Invalid TRUST_ACCEPT payload");
+                    }
+
+                    context.remoteTrusted = true;
+                    established = establishTrustIfReady(context);
+                }
+            }
+        } finally {
+            if (key != null) {
+                Arrays.fill(key, (byte) 0);
+            }
+
+            if (plaintext != null) {
+                Arrays.fill(plaintext, (byte) 0);
+            }
+        }
+
+        if (!ignored && established && connections.get(connection) == context) {
+            events.onTrustEstablished(
                     connection,
-                    context.state.getRemoteIdentity(),
-                    text
+                    context.state.getRemoteIdentity()
             );
+        }
+    }
+
+    public void handleTrustReject(
+            PeerConnection connection,
+            ProtocolMessage message
+    ) throws IOException, GeneralSecurityException {
+
+        ConnectionContext context = getContext(connection);
+
+        byte[] key = null;
+        byte[] plaintext = null;
+
+        try {
+            synchronized (context) {
+                if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                    throw new IOException("Received TRUST_REJECT before authentication");
+                }
+
+                if (context.trustEstablished) {
+                    throw new IOException(
+                            "Received TRUST_REJECT after trust was established"
+                    );
+                }
+
+                if (context.rejected) {
+                    return;
+                }
+
+                key = getInboundKey(context);
+                plaintext = messageCipher.decrypt(message.getPayload(), key);
+
+                String payload = new String(
+                        plaintext,
+                        StandardCharsets.UTF_8
+                );
+
+                if (!TRUST_REJECT_PAYLOAD.equals(payload)) {
+                    throw new IOException("Invalid TRUST_REJECT payload");
+                }
+
+                context.rejected = true;
+                context.state.setStatus(HandshakeStatus.FAILED);
+            }
+        } finally {
+            if (key != null) {
+                Arrays.fill(key, (byte) 0);
+            }
+
+            if (plaintext != null) {
+                Arrays.fill(plaintext, (byte) 0);
+            }
+        }
+
+        closeRejectedConnection(connection, context);
+    }
+
+    private void closeRejectedConnection(
+            PeerConnection connection,
+            ConnectionContext context
+    ) {
+
+        synchronized (context) {
+            context.rejected = true;
+            context.state.setStatus(HandshakeStatus.FAILED);
+        }
+
+        if (connections.remove(connection, context)) {
+            try {
+                connection.close();
+            } catch (IOException ignored) {
+            }
+
+            events.onDisconnected(connection);
+        }
+    }
+
+    public void rejectConnection(PeerConnection connection)
+            throws IOException, GeneralSecurityException {
+
+        ConnectionContext context = getContext(connection);
+        boolean rejectionStarted = false;
+
+        try {
+            synchronized (context) {
+
+                if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                    throw new IOException(
+                            "Cannot reject connection before authentication"
+                    );
+                }
+
+                if (context.trustEstablished) {
+                    throw new IOException(
+                            "Trust is already established"
+                    );
+                }
+
+                if (context.rejected) {
+                    return;
+                }
+
+                context.rejected = true;
+                rejectionStarted = true;
+
+                byte[] key = getOutboundKey(context);
+                byte[] plaintext = TRUST_REJECT_PAYLOAD.getBytes(StandardCharsets.UTF_8);
+
+                try {
+                    byte[] encrypted = messageCipher.encrypt(plaintext, key);
+
+                    send(connection, new ProtocolMessage(
+                            MessageType.TRUST_REJECT,
+                            encrypted
+                    ));
+
+                } finally {
+                    Arrays.fill(key, (byte) 0);
+                    Arrays.fill(plaintext, (byte) 0);
+                }
+            }
 
         } finally {
-            Arrays.fill(key, (byte) 0);
+            if (rejectionStarted) {
+                closeRejectedConnection(connection, context);
+            }
         }
+    }
+
+    private boolean isMutuallyTrusted(ConnectionContext context) {
+        return !context.rejected
+                && context.localTrusted
+                && context.remoteTrusted
+                && context.trustEstablished;
     }
 
     private HandshakeService createHandshakeService(HandshakeState state) {
@@ -403,14 +600,87 @@ public class ProtocolHandler implements MessageHandler {
         }
     }
 
-    public void trustConnection(PeerConnection connection) throws IOException {
-        ConnectionContext context = getContext(connection);
+    private byte[] getOutboundKey(ConnectionContext context) throws IOException {
+        HandshakeSessionKeys keys = context.state.getSessionKeys();
 
-        if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
-            throw new IOException("Cannot trust connection before authentication");
+        if (keys == null) {
+            throw new IOException("Session keys are unavailable");
         }
 
-        context.trusted = true;
+        return context.initiator
+                ? keys.getInitiatorToResponder()
+                : keys.getResponderToInitiator();
+    }
+
+    private byte[] getInboundKey(ConnectionContext context) throws IOException {
+        HandshakeSessionKeys keys = context.state.getSessionKeys();
+
+        if (keys == null) {
+            throw new IOException("Session keys are unavailable");
+        }
+
+        return context.initiator
+                ? keys.getResponderToInitiator()
+                : keys.getInitiatorToResponder();
+    }
+
+    private boolean establishTrustIfReady(ConnectionContext context) {
+        if (context.localTrusted
+                && context.remoteTrusted
+                && !context.trustEstablished) {
+            context.trustEstablished = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void trustConnection(PeerConnection connection) throws IOException, GeneralSecurityException {
+        ConnectionContext context = getContext(connection);
+
+        boolean established;
+
+        synchronized (context) {
+            if (context.state.getStatus() != HandshakeStatus.AUTHENTICATED) {
+                throw new IOException(
+                        "Cannot trust connection before authentication"
+                );
+            }
+
+            if (context.rejected) {
+                throw new IOException("Trust was already rejected.");
+            }
+
+            if (context.trustEstablished || context.localTrusted) {
+                return;
+            }
+
+            byte[] key = getOutboundKey(context);
+            byte[] plaintext = TRUST_ACCEPT_PAYLOAD.getBytes(StandardCharsets.UTF_8);
+
+            try {
+                byte[] encrypted = messageCipher.encrypt(plaintext, key);
+
+                send(connection, new ProtocolMessage(
+                        MessageType.TRUST_ACCEPT,
+                        encrypted
+                ));
+
+                context.localTrusted = true;
+
+                established = establishTrustIfReady(context);
+            } finally {
+                Arrays.fill(key, (byte) 0);
+                Arrays.fill(plaintext, (byte) 0);
+            }
+        }
+
+        if (established && connections.get(connection) == context) {
+            events.onTrustEstablished(
+                    connection,
+                    context.state.getRemoteIdentity()
+            );
+        }
     }
 
     @Override
@@ -429,7 +699,10 @@ public class ProtocolHandler implements MessageHandler {
 
         private HandshakeService handshakeService;
 
-        private boolean trusted = false;
+        private boolean localTrusted = false;
+        private boolean remoteTrusted = false;
+        private boolean trustEstablished = false;
+        private boolean rejected = false;
 
         public ConnectionContext(
                 HandshakeState state,

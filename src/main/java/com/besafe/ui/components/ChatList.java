@@ -1,4 +1,3 @@
-
 package com.besafe.ui.components;
 
 import javafx.scene.control.Label;
@@ -39,7 +38,7 @@ public class ChatList {
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
     }
 
-    public void addChat(String username) {
+    public void addChat(String userId, String username) {
         VBox chatItem = new VBox();
         HBox chatInfo = new HBox();
 
@@ -65,7 +64,7 @@ public class ChatList {
             selectedChatItem = chatItem;
 
             if (onChatSelected != null) {
-                onChatSelected.accept(username);
+                onChatSelected.accept(userId);
             }
         });
 

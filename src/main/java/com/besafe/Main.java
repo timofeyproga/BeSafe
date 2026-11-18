@@ -17,10 +17,12 @@ import com.besafe.ui.RegistrationView;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import javafx.scene.Scene;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class Main extends Application {
 
@@ -40,6 +42,13 @@ public class Main extends Application {
 
         IdentityStorage identityStorage = new IdentityStorage(credentialStore, serializer, encryption);
 
+        Image logo = new Image(
+                Objects.requireNonNull(
+                        getClass().getResourceAsStream("/images/logo.png")
+                )
+        );
+
+        stage.getIcons().add(logo);
         stage.setTitle("BeSafe");
         stage.setWidth(1000);
         stage.setHeight(650);

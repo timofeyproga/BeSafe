@@ -23,6 +23,7 @@ public class IdentityStorage {
     private final CredentialStore credentialStore;
     private final IdentitySerializer serializer;
     private final IdentityEncryption encryption;
+    private final IdentityValidator validator;
 
     private static final String ENCRYPTION_KEY_NAME =
             "BeSafe.IdentityEncryptionKey.v1";
@@ -35,6 +36,7 @@ public class IdentityStorage {
         this.credentialStore = credentialStore;
         this.serializer = serializer;
         this.encryption = encryption;
+        this.validator = new IdentityValidator();
     }
 
     public void initialize() throws IOException {
@@ -49,6 +51,8 @@ public class IdentityStorage {
     }
 
     public void save(UserIdentity user) throws Exception {
+        validator.validate(user);
+
         initialize();
 
         SecretKey encryptionKey;
@@ -116,7 +120,11 @@ public class IdentityStorage {
                 encryptionKey
         );
 
-        return serializer.deserialize(decryptedData);
+        UserIdentity identity = serializer.deserialize(decryptedData);
+
+        validator.validate(identity);
+
+        return identity;
     }
 
 }

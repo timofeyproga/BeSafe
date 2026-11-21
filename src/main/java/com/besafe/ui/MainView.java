@@ -4,6 +4,7 @@ import com.besafe.conversation.Conversation;
 import com.besafe.conversation.ConversationService;
 import com.besafe.conversation.Message;
 import com.besafe.core.BeSafeRuntime;
+import com.besafe.identity.IdentityBackupService;
 import com.besafe.network.PeerAddress;
 import com.besafe.network.PeerConnection;
 import com.besafe.protocol.IdentityPayload;
@@ -14,6 +15,7 @@ import com.besafe.ui.components.ChatList;
 import com.besafe.ui.components.MessageArea;
 import com.besafe.ui.components.MessageInput;
 import com.besafe.ui.dialogs.AddContactDialog;
+import com.besafe.ui.dialogs.IdentityBackupDialog;
 import com.besafe.ui.dialogs.TrustConnectionDialog;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -46,8 +48,9 @@ public class MainView implements ProtocolEvents {
     private final ChatHeader chatHeader;
     private final MessageArea messageArea;
     private final MessageInput messageInput;
+    private final IdentityBackupService backupService;
 
-    public MainView(SessionManager sessionManager, BeSafeRuntime runtime) {
+    public MainView(SessionManager sessionManager, BeSafeRuntime runtime, IdentityBackupService backupService) {
         root = new BorderPane();
         sidebar = new VBox();
         topBar = new StackPane();
@@ -67,6 +70,7 @@ public class MainView implements ProtocolEvents {
         chatArea.getStyleClass().add("chat-area");
 
         this.runtime = runtime;
+        this.backupService = backupService;
         conversationService = runtime.getConversationService();
         conversationByUserId = new HashMap<>();
 
@@ -151,15 +155,13 @@ public class MainView implements ProtocolEvents {
         Button btnSetting = new Button("⚙");
         btnSetting.getStyleClass().add("settings-button");
         btnSetting.setOnAction(event -> {
-            javafx.scene.control.Alert alert =
-                    new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.INFORMATION
-                    );
+            IdentityBackupDialog backupDialog = new IdentityBackupDialog(
+                    backupService,
+                    sessionManager.getUser(),
+                    root.getScene().getWindow()
+            );
 
-            alert.setTitle("BeSafe");
-            alert.setHeaderText("Settings");
-            alert.setContentText("Settings will be available soon.");
-            alert.showAndWait();
+            backupDialog.show();
         });
 
         topBar.getChildren().addAll(appBrand, btnSetting, chatHeader.getRoot());

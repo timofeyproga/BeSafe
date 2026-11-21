@@ -1,7 +1,6 @@
 package com.besafe.identity.storage;
 
 import com.sun.jna.*;
-import com.sun.jna.platform.win32.Advapi32;
 import com.sun.jna.platform.win32.WinBase;
 import com.sun.jna.ptr.PointerByReference;
 

@@ -1,9 +1,10 @@
 package com.besafe;
 
-import com.besafe.conversation.Message;
 import com.besafe.core.BeSafeRuntime;
 import com.besafe.core.RegistrationService;
+import com.besafe.identity.IdentityBackupService;
 import com.besafe.identity.IdentityStorage;
+import com.besafe.identity.IdentityValidator;
 import com.besafe.identity.UserIdentity;
 import com.besafe.identity.storage.CredentialStore;
 import com.besafe.identity.storage.IdentityEncryption;
@@ -40,7 +41,17 @@ public class Main extends Application {
         IdentitySerializer serializer = new IdentitySerializer();
         IdentityEncryption encryption = new IdentityEncryption();
 
-        IdentityStorage identityStorage = new IdentityStorage(credentialStore, serializer, encryption);
+        IdentityStorage identityStorage = new IdentityStorage(
+                credentialStore,
+                serializer,
+                encryption
+        );
+
+        IdentityBackupService backupService = new IdentityBackupService(
+                serializer,
+                encryption,
+                new IdentityValidator()
+        );
 
         Image logo = new Image(
                 Objects.requireNonNull(
@@ -73,7 +84,7 @@ public class Main extends Application {
 
                 registrationView.setOnRegisterComplete(() -> {
                     try {
-                        openMainView(stage, scene, sessionManager);
+                        openMainView(stage, scene, sessionManager, backupService);
                     } catch (Exception e) {
                         showError("Failed to start BeSafe", e);
                     }
@@ -91,7 +102,7 @@ public class Main extends Application {
 
             Scene scene = new Scene(new Parent() {});
 
-            openMainView(stage, scene, sessionManager);
+            openMainView(stage, scene, sessionManager, backupService);
 
         } catch (Exception e) {
             showError("Failed to load user identity", e);
@@ -102,7 +113,8 @@ public class Main extends Application {
     private void openMainView(
             Stage stage,
             Scene scene,
-            SessionManager sessionManager
+            SessionManager sessionManager,
+            IdentityBackupService backupService
     ) throws IOException {
 
         JavaFxProtocolEvents events =
@@ -115,7 +127,8 @@ public class Main extends Application {
 
         MainView mainView = new MainView(
                 sessionManager,
-                runtime
+                runtime,
+                backupService
         );
 
         events.setListener(mainView);

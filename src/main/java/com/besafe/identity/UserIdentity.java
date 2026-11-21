@@ -30,7 +30,7 @@ public class UserIdentity {
             throw new IllegalArgumentException("UserId cannot be null or blank");
         }
 
-        if (publicKey == null || publicKey == null) {
+        if (publicKey == null || privateKey == null) {
             throw new IllegalArgumentException("Keys cannot be null or blank");
         }
 

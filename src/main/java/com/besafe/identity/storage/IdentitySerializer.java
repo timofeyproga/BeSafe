@@ -1,14 +1,16 @@
 package com.besafe.identity.storage;
 
+import com.besafe.identity.IdentityValidator;
 import com.besafe.identity.UserIdentity;
 
 import java.io.*;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.HexFormat;
 
 public class IdentitySerializer {
+
+    private final IdentityValidator validator = new IdentityValidator();
 
     public byte[] serialize(UserIdentity user) throws IOException {
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
@@ -82,17 +84,16 @@ public class IdentitySerializer {
                     new PKCS8EncodedKeySpec(privateKeyBytes)
             );
 
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            UserIdentity identity = new UserIdentity(
+                    username,
+                    userId,
+                    publicKey,
+                    privateKey
+            );
 
-            byte[] calculatedHash = digest.digest(publicKey.getEncoded());
+            validator.validate(identity);
 
-            String calculatedUserId = HexFormat.of().formatHex(calculatedHash);
-
-            if (!calculatedUserId.equals(userId)) {
-                throw new IOException("UserID does not match public key");
-            }
-
-            return new UserIdentity(username, userId, publicKey, privateKey);
+            return identity;
 
         }
     }

@@ -1,17 +1,18 @@
 package com.besafe.ui;
 
 import com.besafe.core.RegistrationService;
+import com.besafe.identity.IdentityBackupService;
 import com.besafe.identity.IdentityStorage;
 import com.besafe.identity.UserIdentity;
 import com.besafe.session.SessionManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 
+import java.io.File;
 import java.security.NoSuchAlgorithmException;
 
 public class RegistrationView {
@@ -19,16 +20,20 @@ public class RegistrationView {
     private final RegistrationService registrationService;
     private final SessionManager sessionManager;
     private final IdentityStorage identityStorage;
+    private final IdentityBackupService backupService;
+
     private Runnable onRegisterComplete;
 
     public RegistrationView(
             RegistrationService registrationService,
             SessionManager sessionManager,
-            IdentityStorage identityStorage
+            IdentityStorage identityStorage,
+            IdentityBackupService backupService
     ) {
         this.registrationService = registrationService;
         this.sessionManager = sessionManager;
         this.identityStorage = identityStorage;
+        this.backupService = backupService;
     }
 
     public VBox createView() {
@@ -75,6 +80,76 @@ public class RegistrationView {
             }
         });
 
+        Button btnRestore = new Button("Restore identity");
+        btnRestore.setOnAction(event -> {
+            Window owner = txt.getScene().getWindow();
+
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("select BeSafe backup");
+
+            fileChooser.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter(
+                            "BeSafe Backup (*.bsbackup)",
+                            "*.bsbackup"
+                    ));
+
+            File backupFile = fileChooser.showOpenDialog(owner);
+
+            if (backupFile == null) {
+                return;
+            }
+
+            TextInputDialog codeDialog = new TextInputDialog();
+            codeDialog.initOwner(owner);
+            codeDialog.setTitle("Identity Recover");
+            codeDialog.setHeaderText("Enter your Recovery Code");
+            codeDialog.setContentText("Recovery Code: ");
+
+            codeDialog.getEditor().setPromptText("64-character Recovery Code");
+
+            String recoveryCode = codeDialog.showAndWait().orElse(null);
+
+            if (recoveryCode == null || recoveryCode.isBlank()) {
+                return;
+            }
+
+            try {
+                UserIdentity restoredUser = backupService.restoreBackup(
+                        backupFile.toPath(),
+                        recoveryCode
+                );
+
+                identityStorage.save(restoredUser);
+
+                sessionManager.setUser(restoredUser);
+
+                Alert success = new Alert(Alert.AlertType.INFORMATION);
+                success.initOwner(owner);
+                success.setTitle("BeSafe");
+                success.setHeaderText("Identity Recovered");
+                success.setContentText(
+                        "Your identity has been restored.\nUser ID:"
+                            + restoredUser.getUserId()
+                );
+                success.showAndWait();
+
+                if (onRegisterComplete != null) {
+                    onRegisterComplete.run();
+                }
+            } catch (Exception e) {
+                Alert error = new Alert(Alert.AlertType.ERROR);
+                error.initOwner(owner);
+                error.setTitle("BeSafe");
+                error.setHeaderText("Identity recovery failed!");
+                error.setContentText(
+                        "Could not restore your identity. "
+                        + "Check the backup file and Recovery Code. "
+                        + "Error message: " + e.getMessage()
+                );
+                error.showAndWait();
+            }
+        });
+
         VBox vbox = new VBox(15);
         vbox.setPadding(new Insets(20));
         vbox.setAlignment(Pos.CENTER);
@@ -82,7 +157,8 @@ public class RegistrationView {
                 enterLabel,
                 descLabel,
                 txt,
-                btnContinue
+                btnContinue,
+                btnRestore
         );
 
         return vbox;

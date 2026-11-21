@@ -82,7 +82,7 @@ public class IdentityBackupService {
 
         if (recoveryKey.length != RECOVERY_CODE_LENGTH) {
             Arrays.fill(recoveryKey, (byte) 0);
-            throw new IOException("Invalid recovery code length: ");
+            throw new IOException("Invalid recovery code length: " + recoveryKey.length);
         }
 
         try {

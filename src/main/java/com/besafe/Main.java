@@ -75,7 +75,8 @@ public class Main extends Application {
                 RegistrationView registrationView = new RegistrationView(
                         registrationService,
                         sessionManager,
-                        identityStorage
+                        identityStorage,
+                        backupService
                 );
 
                 root = registrationView.createView();

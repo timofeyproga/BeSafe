@@ -109,22 +109,29 @@ public class IdentityStorage {
 
         byte[] keyBytes = credentialStore.loadSecret(ENCRYPTION_KEY_NAME);
 
-        if (keyBytes.length != 32) {
+        if (keyBytes == null || keyBytes.length != 32) {
             throw new IOException("Invalid AES key length");
         }
 
         SecretKey encryptionKey = new SecretKeySpec(keyBytes, "AES");
 
-        byte[] decryptedData = encryption.decrypt(
-                encryptedData,
-                encryptionKey
-        );
+        try {
+            byte[] decryptedData = encryption.decrypt(
+                    encryptedData,
+                    encryptionKey
+            );
 
-        UserIdentity identity = serializer.deserialize(decryptedData);
+            UserIdentity identity = serializer.deserialize(decryptedData);
 
-        validator.validate(identity);
+            validator.validate(identity);
 
-        return identity;
+            return identity;
+        } catch (Exception e) {
+            throw new IdentityCorruptedException(
+                    "Stored identity is corrupted or failed integrity verification",
+                    e
+            );
+        }
     }
 
 }

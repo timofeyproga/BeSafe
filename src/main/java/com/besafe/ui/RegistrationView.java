@@ -37,11 +37,25 @@ public class RegistrationView {
     }
 
     public VBox createView() {
+        return createView(false);
+    }
 
-        Label enterLabel = new Label("Welcome to BeSafe!");
+    public VBox createView(boolean recoveryMode) {
+
+        Label enterLabel = new Label(
+                recoveryMode
+                        ? "Identity recovery required"
+                        : "Welcome to BeSafe!"
+        );
         enterLabel.setId("welcome-title");
-        Label descLabel = new Label("Create your identity to get started");
+
+        Label descLabel = new Label(
+                recoveryMode
+                        ? "Your identity could not verified. Restore it from a BeSafe backup."
+                        : "Create your identity to get started"
+        );
         descLabel.setId("welcome-description");
+
         TextField txt = new TextField();
         txt.setId("name-field");
         Button btnContinue = new Button("Continue");
@@ -79,6 +93,14 @@ public class RegistrationView {
                 alert.showAndWait();
             }
         });
+
+        if (recoveryMode) {
+            txt.setVisible(false);
+            txt.setManaged(false);
+
+            btnContinue.setVisible(false);
+            btnContinue.setManaged(false);
+        }
 
         Button btnRestore = new Button("Restore identity");
         btnRestore.setOnAction(event -> {
@@ -133,7 +155,7 @@ public class RegistrationView {
                 success.setTitle("BeSafe");
                 success.setHeaderText("Identity Recovered");
                 success.setContentText(
-                        "Your identity has been restored.\nUser ID:"
+                        "Your identity has been restored.\nUser ID: "
                             + restoredUser.getUserId()
                 );
 

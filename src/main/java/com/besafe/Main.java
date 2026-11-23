@@ -2,10 +2,7 @@ package com.besafe;
 
 import com.besafe.core.BeSafeRuntime;
 import com.besafe.core.RegistrationService;
-import com.besafe.identity.IdentityBackupService;
-import com.besafe.identity.IdentityStorage;
-import com.besafe.identity.IdentityValidator;
-import com.besafe.identity.UserIdentity;
+import com.besafe.identity.*;
 import com.besafe.identity.storage.CredentialStore;
 import com.besafe.identity.storage.IdentityEncryption;
 import com.besafe.identity.storage.IdentitySerializer;
@@ -67,7 +64,18 @@ public class Main extends Application {
         try {
             identityStorage.initialize();
 
-            UserIdentity user = identityStorage.load();
+            UserIdentity user = null;
+            boolean recoveryMode = false;
+
+            try {
+                user = identityStorage.load();
+            } catch (IdentityCorruptedException e) {
+                recoveryMode = true;
+
+                System.err.println(
+                        "Stored identity is corrupted. Recovery mode enabled."
+                );
+            }
 
             Parent root;
 
@@ -79,7 +87,7 @@ public class Main extends Application {
                         backupService
                 );
 
-                root = registrationView.createView();
+                root = registrationView.createView(recoveryMode);
 
                 Scene scene = new Scene(root);
 

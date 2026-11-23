@@ -502,7 +502,7 @@
 
 .trust-identity-card {
     -fx-background-color: #1F2937;
-    -fx-background-ragius: 10px;
+    -fx-background-radius: 10px;
     -fx-padding: 16px;
     -fx-spacing: 7px;
 }
@@ -545,11 +545,144 @@
 .trust-accept-button {
     -fx-background-color: #16A34A;
     -fx-text-fill: white;
-    -fx-background-ragius: 7px;
+    -fx-background-radius: 7px;
     -fx-padding: 9px 20px;
     -fx-cursor: hand;
 }
 
 .trust-accept-button:hover {
     -fx-background-color: #15803D;
+}
+
+/* =================================
+   BESAFE IDENTITY DIALOGS
+   ================================= */
+
+.besafe-dialog {
+    -fx-background-color: #10101F;
+}
+
+.besafe-dialog > .header-panel {
+    -fx-background-color: #10101F;
+    -fx-padding: 20px 20px 12px 20px;
+}
+
+.besafe-dialog > .header-panel .label {
+    -fx-text-fill: #F9FAFB;
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+}
+
+.besafe-dialog > .content {
+    -fx-background-color: #10101F;
+    -fx-padding: 10px 20px 20px 20px;
+}
+
+.besafe-dialog > .button-bar {
+    -fx-background-color: #10101F;
+    -fx-padding: 12px 20px 18px 20px;
+}
+
+/* Description */
+
+.backup-description {
+    -fx-text-fill: #9CA3AF;
+    -fx-font-size: 13px;
+    -fx-wrap-text: true;
+}
+
+.recovery-code-field .content {
+    -fx-background-color: #19192D;
+}
+
+/* Confirmation */
+
+.backup-confirm-checkbox {
+    -fx-text-fill: #D1D5DB;
+    -fx-font-size: 12px;
+}
+
+.backup-confirm-checkbox .box {
+    -fx-background-color: #19192D;
+    -fx-border-color: #45455F;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-padding: 3px;
+}
+
+.backup-confirm-checkbox:hover .box {
+    -fx-border-color: #3B82F6;
+}
+
+.backup-confirm-checkbox.selected .box {
+    -fx-background-color: #2563EB;
+    -fx-border-color: #2563EB;
+}
+
+.backup-confirm-checkbox.selected .mark {
+    -fx-background-color: #FFFFFF;
+}
+
+.backup-confirm-checkbox.focused .box {
+    -fx-border-color: #60A5FA;
+}
+
+/* Dialog content */
+
+.backup-dialog-content {
+    -fx-background-color: #10101F;
+    -fx-spacing: 12px;
+}
+
+/* Recovery code */
+
+.recovery-code-field {
+    -fx-contol-inner-background: #151528;
+    -fx-background-color: #151528;
+    -fx-text-fill: #93C5FD;
+    -fx-highlight-fill: #2563EB;
+    -fx-highlight-text-fill: #FFFFFF;
+
+    -fx-font-family: "Consolas";
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+
+    -fx-border-color: #303B61;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 10px;
+    -fx-background-radius: 10px;
+
+    -fx-padding: 12px;
+}
+
+.recovery-code-field.focused {
+    -fx-border-color: #3B82F6;
+}
+
+.recovery-code-field {
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+    -fx-border-insets: 0;
+    -fx-padding: 0;
+}
+
+.recovery-code-field .scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+}
+
+.recovery-code-field .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.recovery-code-field .scroll-pane .content {
+    -fx-background-color: #151528;
+    -fx-background-radius: 10px;
+}
+
+.recovery-code-field .corner {
+    -fx-background-color: #151528;
+    -fx-background-radius: 0 0 10px 0;
 }

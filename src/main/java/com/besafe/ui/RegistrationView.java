@@ -107,6 +107,11 @@ public class RegistrationView {
 
             codeDialog.getEditor().setPromptText("64-character Recovery Code");
 
+            codeDialog.getDialogPane().getStylesheets().addAll(
+                    owner.getScene().getStylesheets()
+            );
+            codeDialog.getDialogPane().getStyleClass().add("besafe-dialog");
+
             String recoveryCode = codeDialog.showAndWait().orElse(null);
 
             if (recoveryCode == null || recoveryCode.isBlank()) {
@@ -131,6 +136,12 @@ public class RegistrationView {
                         "Your identity has been restored.\nUser ID:"
                             + restoredUser.getUserId()
                 );
+
+                success.getDialogPane().getStylesheets().addAll(
+                        owner.getScene().getStylesheets()
+                );
+                success.getDialogPane().getStyleClass().add("besafe-dialog");
+
                 success.showAndWait();
 
                 if (onRegisterComplete != null) {
@@ -146,6 +157,13 @@ public class RegistrationView {
                         + "Check the backup file and Recovery Code. "
                         + "Error message: " + e.getMessage()
                 );
+
+                error.getDialogPane().getStylesheets().addAll(
+                        owner.getScene().getStylesheets()
+                );
+
+                error.getDialogPane().getStyleClass().add("besafe-dialog");
+
                 error.showAndWait();
             }
         });

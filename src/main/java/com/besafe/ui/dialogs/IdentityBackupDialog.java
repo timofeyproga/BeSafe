@@ -118,6 +118,8 @@ public class IdentityBackupDialog {
         dialog.setTitle("Your Recovery Code");
         dialog.setHeaderText("Your identity backup has been created");
 
+        applyStyles(dialog);
+
         ButtonType confirmButton = new ButtonType(
                 "I've saved my Recovery Code",
                 ButtonBar.ButtonData.OK_DONE
@@ -133,22 +135,26 @@ public class IdentityBackupDialog {
                 + "Keep it somewhere safe. BeSafe cannot recover it for you."
         );
         description.setWrapText(true);
+        description.getStyleClass().add("backup-description");
 
         TextArea codeField = new TextArea(recoveryCode);
         codeField.setEditable(false);
         codeField.setWrapText(true);
         codeField.setPrefRowCount(3);
+        codeField.getStyleClass().add("recovery-code-field");
 
-        Button copyButton = new Button("\uD83D\uDCCB");
+        Button copyButton = new Button("Copy Recovery Code");
         copyButton.setOnAction(event -> {
             ClipboardContent content = new ClipboardContent();
             content.putString(recoveryCode);
             Clipboard.getSystemClipboard().setContent(content);
         });
+        copyButton.getStyleClass().add("dialog-secondary-button");
 
         CheckBox savedCheckBox = new CheckBox(
                 "I have saved the Recovery Code in a safe place"
         );
+        savedCheckBox.getStyleClass().add("backup-confirm-checkbox");
 
         VBox content = new VBox(
                 12,
@@ -159,6 +165,7 @@ public class IdentityBackupDialog {
         );
         content.setPadding(new Insets(10));
         content.setPrefWidth(430);
+        content.getStyleClass().add("backup-dialog-content");
 
         dialog.getDialogPane().setContent(content);
 
@@ -168,6 +175,18 @@ public class IdentityBackupDialog {
         return dialog.showAndWait()
                 .filter(result -> result == confirmButton)
                 .isPresent();
+    }
+
+    private void applyStyles(Dialog<?> dialog) {
+        if (owner != null && owner.getScene() != null) {
+            dialog.getDialogPane()
+                    .getStylesheets()
+                    .addAll(owner.getScene().getStylesheets());
+        }
+
+        dialog.getDialogPane()
+                .getStyleClass()
+                .add("besafe-dialog");
     }
 
 }

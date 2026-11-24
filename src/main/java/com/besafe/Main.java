@@ -2,6 +2,7 @@ package com.besafe;
 
 import com.besafe.core.BeSafeRuntime;
 import com.besafe.core.RegistrationService;
+import com.besafe.identity.device.*;
 import com.besafe.identity.*;
 import com.besafe.identity.storage.CredentialStore;
 import com.besafe.identity.storage.IdentityEncryption;
@@ -27,6 +28,8 @@ public class Main extends Application {
     private static final int DEFAULT_PORT = 45821;
 
     private BeSafeRuntime runtime;
+    private DeviceService deviceService;
+    private StoredDevice currentDevice;
 
     @Override
     public void start(Stage stage) {
@@ -48,6 +51,23 @@ public class Main extends Application {
                 serializer,
                 encryption,
                 new IdentityValidator()
+        );
+
+        DeviceKeyManager deviceKeyManager = new DeviceKeyManager();
+        DeviceCertificateManager deviceCertificateManager = new DeviceCertificateManager();
+
+        DeviceStorage deviceStorage = new DeviceStorage(
+                credentialStore,
+                new DeviceIdentitySerializer(),
+                new DeviceCertificateSerializer(),
+                deviceCertificateManager,
+                deviceKeyManager
+        );
+
+        deviceService = new DeviceService(
+                deviceKeyManager,
+                deviceCertificateManager,
+                deviceStorage
         );
 
         Image logo = new Image(
@@ -124,13 +144,19 @@ public class Main extends Application {
             Scene scene,
             SessionManager sessionManager,
             IdentityBackupService backupService
-    ) throws IOException {
+    ) throws Exception {
 
         JavaFxProtocolEvents events =
                 new JavaFxProtocolEvents();
 
+        UserIdentity user = sessionManager.getUser();
+
+        currentDevice = deviceService.loadOrCreateDevice(user);
+
+        System.out.println("Device identity initialized.");
+
         runtime = new BeSafeRuntime(
-                sessionManager.getUser(),
+                user,
                 events
         );
 

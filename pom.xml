@@ -6,7 +6,7 @@
 
     <groupId>com.besafe</groupId>
     <artifactId>besafe</artifactId>
-    <version>0.1.0-alpha-3</version>
+    <version>0.1.0-beta-1</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
